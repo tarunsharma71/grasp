@@ -26,7 +26,7 @@ Grasp fixed all three — and built the architecture from the ground up for the 
 
 **Three original contributions:**
 
-**1. The dedicated browser.** Grasp introduced the idea of giving AI its own Chrome profile. The agent logs in once; every session is saved permanently in `chrome-grasp`. No other tool does this. Cloud browsers lose every cookie on shutdown. Local Playwright starts blank every time. Grasp starts logged in — always.
+**1. The dedicated browser.** Grasp packages the "AI owns its browser" idea as a ready-to-use MCP server. The agent logs in once; every session is saved permanently in `chrome-grasp`. Cloud browsers lose every cookie on shutdown. Local Playwright requires manual persistent context configuration with no MCP-era packaging. Grasp starts logged in — one `npx grasp` to set up everything.
 
 **2. Hint Map.** Instead of dumping raw HTML into the context window, Grasp scans the live viewport and produces a compact semantic map:
 
@@ -38,7 +38,7 @@ Grasp fixed all three — and built the architecture from the ground up for the 
 
 IDs are fingerprint-stable across calls. Token cost drops 90%+ versus raw HTML. This is Grasp's original perception layer — purpose-built for how models actually reason about UI.
 
-**3. Real events, not injection.** Every click is a mouse curve with randomized timing and landing offset. Every scroll is a sequence of CDP wheel events. Every keystroke has per-character delay. This is not `element.click()`. It is OS-level input indistinguishable from a human hand.
+**3. Real events, not injection.** Every click is a mouse curve with randomized timing and landing offset. Every scroll is a sequence of CDP wheel events. Every keystroke has per-character delay. This is not `element.click()` — it is real CDP input that behaves closer to human operation than script injection.
 
 On pages that expose `window.__webmcp__`, Grasp calls native tool APIs directly and skips DOM parsing entirely. On every other page — the vast majority of the web — Hint Map and real events take over automatically. The agent never needs to know which mode it is in.
 
