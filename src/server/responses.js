@@ -6,8 +6,8 @@ function normalizeText(value) {
   return String(value ?? '');
 }
 
-export function textResponse(value) {
-  return {
+export function textResponse(value, metadata) {
+  const response = {
     content: [
       {
         type: 'text',
@@ -15,11 +15,17 @@ export function textResponse(value) {
       },
     ],
   };
+
+  if (metadata !== undefined) {
+    response.metadata = metadata;
+  }
+
+  return response;
 }
 
-export function errorResponse(value) {
+export function errorResponse(value, metadata) {
   return {
-    ...textResponse(value),
+    ...textResponse(value, metadata),
     isError: true,
   };
 }
