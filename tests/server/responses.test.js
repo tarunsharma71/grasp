@@ -16,6 +16,7 @@ const traceMeta = {
 const actionMeta = {
   error_code: 'ACTION_NOT_VERIFIED',
   retryable: true,
+  suggested_next_step: 'reverify',
   evidence: {
     phase: 'verify',
   },
@@ -42,5 +43,6 @@ test('errorResponse surfaces action verification meta shape', () => {
   assert.strictEqual(result.isError, true);
   assert.strictEqual(result.meta.error_code, 'ACTION_NOT_VERIFIED');
   assert.strictEqual(result.meta.retryable, true);
+  assert.strictEqual(result.meta.suggested_next_step, 'reverify');
   assert.deepStrictEqual(result.meta.evidence, { phase: 'verify' });
 });

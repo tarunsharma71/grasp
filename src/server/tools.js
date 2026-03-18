@@ -7,6 +7,8 @@ import { clickByHintId, typeByHintId, scroll, watchElement, pressKey, hoverByHin
 import { errorResponse, imageResponse, textResponse } from './responses.js';
 import { describeMode, syncPageState } from './state.js';
 import { audit, readLogs } from './audit.js';
+import { verifyTypeResult } from './postconditions.js';
+import { TYPE_FAILED } from './error-codes.js';
 
 const HIGH_RISK_KEYWORDS = [
   '发送', '提交', '删除', '支付', '确认', '清空', '注销', '退出', '解绑', '重置',
@@ -240,18 +242,42 @@ export function registerTools(server, state) {
     async ({ hint_id, text, press_enter = false }) => {
       const page = await getActivePage();
 
+      const normalizedHintId = hint_id.toUpperCase();
+      const rebuildHints = createRebuildHints(page, state);
+
       try {
-        const normalizedHintId = hint_id.toUpperCase();
-        const rebuildHints = createRebuildHints(page, state);
         await typeByHintId(page, normalizedHintId, text, press_enter, { rebuildHints });
-        audit('type', `[${normalizedHintId}] "${text.slice(0, 20)}${text.length > 20 ? '...' : ''}"`);
+        const verdict = await verifyTypeResult({ page, expectedText: text });
+        if (!verdict.ok) {
+          await audit('type_failed', `[${normalizedHintId}] ${verdict.error_code}`);
+          await syncPageState(page, state, { force: true });
+          return errorResponse(
+            `Type verification failed for [${normalizedHintId}]`,
+            {
+              error_code: verdict.error_code,
+              retryable: verdict.retryable,
+              suggested_next_step: verdict.suggested_next_step,
+              evidence: verdict.evidence,
+            }
+          );
+        }
+
+        await audit('type', `[${normalizedHintId}] "${text.slice(0, 20)}${text.length > 20 ? '...' : ''}"`);
         await syncPageState(page, state, { force: true });
 
         return textResponse(
           `Typed "${text}" into [${normalizedHintId}]${press_enter ? ' and pressed Enter' : ''}.`
         );
       } catch (err) {
-        return errorResponse(`Type failed: ${err.message}`);
+        await audit('type_failed', `[${normalizedHintId}] ${err.message}`);
+        return errorResponse(
+          `Type failed: ${err.message}`,
+          {
+            error_code: TYPE_FAILED,
+            retryable: true,
+            suggested_next_step: 'retry',
+          }
+        );
       }
     }
   );

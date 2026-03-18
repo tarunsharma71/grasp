@@ -16,14 +16,14 @@ export function textResponse(value, meta) {
     ],
   };
 
-  if (meta !== undefined) {
+  if (meta && Object.keys(meta).length > 0) {
     response.meta = meta;
   }
 
   return response;
 }
 
-export function errorResponse(value, meta) {
+export function errorResponse(value, meta = {}) {
   return {
     ...textResponse(value, meta),
     isError: true,

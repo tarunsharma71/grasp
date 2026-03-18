@@ -1,0 +1,2 @@
+export const ACTION_NOT_VERIFIED = 'ACTION_NOT_VERIFIED';
+export const TYPE_FAILED = 'TYPE_FAILED';
