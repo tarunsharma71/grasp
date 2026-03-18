@@ -2,6 +2,7 @@ import { readConfig } from './config.js';
 import { detectChromePath, startChromeHint } from './detect-chrome.js';
 import { readRuntimeStatus } from '../server/runtime-status.js';
 import { readLogs } from '../server/audit.js';
+import { isSafeModeEnabled } from '../server/state.js';
 
 async function pingChrome(cdpUrl) {
   try {
@@ -34,8 +35,8 @@ export async function runStatus() {
   const config = await readConfig();
   const cdpUrl = process.env.CHROME_CDP_URL || config.cdpUrl;
   const runtimeStatus = await readRuntimeStatus();
-  const effectiveSafeMode = runtimeStatus?.safeMode ?? config.safeMode;
-  const safeModeNote = effectiveSafeMode === config.safeMode ? '' : ' (runtime override)';
+  const safeMode = isSafeModeEnabled();
+  const safeModeNote = safeMode === config.safeMode ? '' : ` (config: ${config.safeMode ? 'on' : 'off'})`;
 
   const sep = '─'.repeat(44);
   console.log('');
@@ -45,7 +46,7 @@ export async function runStatus() {
   const chromeInfo = await pingChrome(cdpUrl);
   const connected = chromeInfo !== null;
 
-  const statusLabel = connected ? 'connected (live)' : runtimeStatus?.state ?? 'not reachable';
+  const statusLabel = connected ? 'connected (live)' : (runtimeStatus?.state ?? 'CDP_UNREACHABLE');
   console.log(`  CDP URL    ${cdpUrl}`);
   console.log(`  Connection ${statusLabel}`);
   if (!connected && runtimeStatus?.lastError) {
@@ -56,7 +57,7 @@ export async function runStatus() {
     console.log(`             Last seen: ${updatedAt}`);
   }
   console.log(`  Chrome     ${connected ? 'running  ' + chromeInfo.Browser : 'not reachable'}`);
-  console.log(`  Safe mode  ${effectiveSafeMode ? 'on' : 'off'}${safeModeNote}`);
+  console.log(`  Safe mode  ${safeMode ? 'on' : 'off'}${safeModeNote}`);
 
   if (connected) {
     const tab = await getActiveChromeTab(cdpUrl);
