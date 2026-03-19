@@ -41,6 +41,12 @@ IDs are fingerprint-stable across calls. Token cost drops 90%+ versus passing ra
 
 On pages that expose `window.__webmcp__`, Grasp bypasses the DOM entirely and calls native tool APIs directly. On every other page, Hint Map and real events handle the interaction. The agent does not need to know which path was taken.
 
+**For high-friction or strongly verified environments, Grasp accepts one-time human presence.**
+It does not try to erase every gate.
+It turns a necessary first confirmation into browser state the agent can keep using afterwards.
+
+**It does not eliminate gates. It eliminates the repetition of gates.**
+
 ---
 
 ## Install

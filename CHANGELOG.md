@@ -4,6 +4,23 @@ All notable changes to Grasp are documented here.
 
 ---
 
+## v0.3.0 — 2026-03-19
+
+### Added
+- OpenClaw-oriented launcher/wrapper at `scripts/grasp_openclaw_ctl.sh` for browser bootstrap, CDP startup, health checks, and lifecycle control
+- `PLAN.md` to define Grasp `v0.3.0` as an OpenClaw-ready agent browser runtime release
+- OpenClaw integration docs:
+  - `docs/openclaw-quickstart-v0.3.md`
+  - `docs/openclaw-agent-entry-v0.3.md`
+  - `docs/openclaw-smoke-test-v0.3.md`
+  - `docs/release-notes-v0.3.0.md`
+
+### Changed
+- README and README.zh-CN now make the product boundary explicit for strongly verified / high-friction environments
+- OpenClaw runtime path now centers on a dedicated browser profile and local launcher flow instead of asking users to reason about CDP details directly
+
+---
+
 ## v0.2.0 — 2026-03-19
 
 ### Added
