@@ -8,7 +8,7 @@
 
 ## Why v0.3 exists
 
-`v0.2.0` proved that Grasp is already more than a browser automation toy:
+`v0.3.0` is the release where Grasp moves from a strong standalone browser MCP project toward an OpenClaw-ready agent browser runtime:
 - the local MCP server works
 - the dedicated browser profile model is real
 - the persistent-agent-browser story is valid
