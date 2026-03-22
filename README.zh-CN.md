@@ -9,7 +9,7 @@
 
 > **Grasp 是一个 AI 浏览网关：它能进入网页、读取内容、执行操作、发起接力，并带着证据恢复真实网页任务。**
 
-Grasp 完全本地运行，使用专属的 `chrome-grasp` profile，让 agent 拥有可以复用的浏览器会话，而不是每次都从空白标签页重新开始。
+Grasp 完全本地运行，使用专属的 `chrome-grasp` 浏览器配置目录，让智能体拥有可以复用的浏览器会话，而不是每次都从空白标签页重新开始。
 
 当前包版本：`v0.4.0`  
 对外文档入口：[docs/README.md](./docs/README.md)
@@ -49,7 +49,7 @@ Grasp 要解决的是这些真实流程里的连续性问题：
 npx grasp
 ```
 
-它会检测 Chrome，启动专属 `chrome-grasp` profile，并帮助你把网关接到 AI 客户端上。
+它会检测 Chrome，启动专属 `chrome-grasp` 浏览器配置目录，并帮助你把网关接到 AI 客户端上。
 
 ### 2. 接入客户端
 
