@@ -179,3 +179,78 @@ test('continue returns handoff guidance when the page is gated', async () => {
   assert.equal(result.meta.status, 'handoff_required');
   assert.equal(result.meta.continuation.suggested_next_action, 'request_handoff');
 });
+
+test('smoke: entry returns direct on a direct page', async () => {
+  const calls = [];
+  const server = { registerTool(name, spec, handler) { calls.push({ name, handler }); } };
+  const state = { pageState: { currentRole: 'content', graspConfidence: 'high', riskGateDetected: false }, handoff: { state: 'idle' } };
+
+  registerGatewayTools(server, state, {
+    enterWithStrategy: async () => ({ url: 'https://example.com/', title: 'Example Domain', preflight: { session_trust: 'high' }, pageState: state.pageState }),
+  });
+
+  const entry = calls.find((tool) => tool.name === 'entry');
+  const result = await entry.handler({ url: 'https://example.com/' });
+
+  assert.equal(result.meta.status, 'direct');
+  assert.deepEqual(result.meta.result, {});
+  assert.equal(result.meta.continuation.can_continue, true);
+  assert.equal(result.meta.continuation.suggested_next_action, 'inspect');
+});
+
+test('smoke: extract returns non-empty main text on a readable page', async () => {
+  const calls = [];
+  const server = { registerTool(name, spec, handler) { calls.push({ name, handler }); } };
+  const page = createFakePage({
+    url: () => 'https://example.com/',
+    title: () => 'Example Domain',
+  });
+  const state = { pageState: { currentRole: 'content', graspConfidence: 'high', riskGateDetected: false }, handoff: { state: 'idle' } };
+
+  registerGatewayTools(server, state, {
+    getActivePage: async () => page,
+    syncPageState: async (_page, currentState) => {
+      currentState.pageState = state.pageState;
+      return currentState;
+    },
+    waitUntilStable: async () => ({ stable: true }),
+    extractMainContent: async () => ({ title: 'Example Domain', text: 'Example domain content for smoke coverage.' }),
+  });
+
+  const extract = calls.find((tool) => tool.name === 'extract');
+  const result = await extract.handler();
+
+  assert.equal(result.meta.status, 'direct');
+  assert.ok(result.meta.result.main_text.length > 0);
+  assert.equal(result.meta.continuation.can_continue, true);
+  assert.equal(result.meta.continuation.suggested_next_action, 'inspect');
+});
+
+test('smoke: continue returns handoff guidance on a handoff-required page', async () => {
+  const calls = [];
+  const server = { registerTool(name, spec, handler) { calls.push({ name, handler }); } };
+  const page = createFakePage({
+    url: () => 'https://github.com/login',
+    title: () => 'Sign in to GitHub',
+  });
+  const state = {
+    pageState: { currentRole: 'checkpoint', graspConfidence: 'low', riskGateDetected: true },
+    handoff: { state: 'handoff_required' },
+  };
+
+  registerGatewayTools(server, state, {
+    getActivePage: async () => page,
+    syncPageState: async (_page, currentState) => {
+      currentState.pageState = state.pageState;
+      return currentState;
+    },
+  });
+
+  const continueTool = calls.find((tool) => tool.name === 'continue');
+  const result = await continueTool.handler();
+
+  assert.equal(result.meta.status, 'handoff_required');
+  assert.equal(result.meta.continuation.can_continue, false);
+  assert.equal(result.meta.continuation.suggested_next_action, 'request_handoff');
+  assert.equal(result.meta.continuation.handoff_state, 'handoff_required');
+});

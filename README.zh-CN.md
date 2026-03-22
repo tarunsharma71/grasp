@@ -91,6 +91,7 @@ args = ["-y", "grasp"]
 - `continue`：在不触发浏览器动作的前提下决定下一步
 
 工具说明见：[docs/reference/mcp-tools.md](./docs/reference/mcp-tools.md)
+手工 smoke 路径见：[docs/reference/smoke-paths.md](./docs/reference/smoke-paths.md)
 
 ---
 
@@ -161,6 +162,7 @@ args = ["-y", "grasp"]
 - [docs/README.md](./docs/README.md)
 - [docs/product/ai-browser-gateway.md](./docs/product/ai-browser-gateway.md)
 - [docs/reference/mcp-tools.md](./docs/reference/mcp-tools.md)
+- [docs/reference/smoke-paths.md](./docs/reference/smoke-paths.md)
 
 ## 发布
 

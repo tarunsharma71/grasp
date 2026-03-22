@@ -85,6 +85,7 @@ Start with the high-level tools:
 - `continue` to decide the next step without firing a browser action
 
 Reference: [docs/reference/mcp-tools.md](./docs/reference/mcp-tools.md)
+Manual smoke playbook: [docs/reference/smoke-paths.md](./docs/reference/smoke-paths.md)
 
 ---
 
@@ -155,6 +156,7 @@ Full reference: [docs/reference/mcp-tools.md](./docs/reference/mcp-tools.md)
 - [docs/README.md](./docs/README.md)
 - [docs/product/ai-browser-gateway.md](./docs/product/ai-browser-gateway.md)
 - [docs/reference/mcp-tools.md](./docs/reference/mcp-tools.md)
+- [docs/reference/smoke-paths.md](./docs/reference/smoke-paths.md)
 
 ## Releases
 

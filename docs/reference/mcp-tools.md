@@ -23,6 +23,8 @@ Recommended default flow:
 3. `extract` or `continue`
 4. if needed, move into handoff and then `resume_after_handoff`
 
+Manual smoke playbook: [docs/reference/smoke-paths.md](./smoke-paths.md)
+
 ---
 
 ## Advanced Runtime Primitives
