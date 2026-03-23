@@ -131,3 +131,35 @@ test('workspace pages classify as workspace with a coarse surface hint', () => {
   assert.equal(next.currentRole, 'workspace');
   assert.equal(next.workspaceSurface, 'thread');
 });
+
+test('common content pages are not misclassified as workspace', () => {
+  const state = applySnapshotToPageGraspState(createPageGraspState(), {
+    url: 'https://example.com/article',
+    snapshotHash: 'content-a',
+    title: 'Example article',
+    bodyText: '消息 详情 列表 加载中 This is a normal article page with illustrative text.',
+    nodes: 6,
+    forms: 0,
+    navs: 1,
+    headings: ['Example article'],
+  });
+
+  assert.notEqual(state.currentRole, 'workspace');
+  assert.equal(state.currentRole, 'content');
+});
+
+test('composer-dominant workspace pages classify as composer surface', () => {
+  const state = applySnapshotToPageGraspState(createPageGraspState(), {
+    url: 'https://www.zhipin.com/web/geek/chat?id=112222491&source=0',
+    snapshotHash: 'chat-b',
+    title: 'BOSS直聘',
+    bodyText: '输入消息 按Enter键发送 发送消息',
+    nodes: 18,
+    forms: 0,
+    navs: 2,
+    headings: [],
+  });
+
+  assert.equal(state.currentRole, 'workspace');
+  assert.equal(state.workspaceSurface, 'composer');
+});

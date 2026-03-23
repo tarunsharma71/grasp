@@ -82,8 +82,6 @@ function getUrlPath(url) {
 
 function detectWorkspaceSignals({ url, title = '', bodyText = '', headings = [] }) {
   const text = bodyText.toLowerCase();
-  const titleText = String(title).toLowerCase();
-  const headingText = headings.join(' ').toLowerCase();
   const path = getUrlPath(url);
   const signals = [];
 
@@ -93,62 +91,96 @@ function detectWorkspaceSignals({ url, title = '', bodyText = '', headings = [] 
   if (path.includes('/message') || path.includes('/msg')) {
     signals.push('workspace_message_path');
   }
-  if (text.includes('按enter键发送') || text.includes('发消息') || text.includes('发送消息')) {
+  if (text.includes('按enter键发送')) {
     signals.push('workspace_composer_text');
   }
-  if (text.includes('消息') || text.includes('聊天') || text.includes('对话') || headingText.includes('消息')) {
+  if (text.includes('发消息')) {
+    signals.push('workspace_composer_text');
+  }
+  if (text.includes('发送消息')) {
+    signals.push('workspace_composer_text');
+  }
+  if (text.includes('输入消息')) {
+    signals.push('workspace_composer_text');
+  }
+  if (text.includes('消息') || text.includes('聊天') || text.includes('对话')) {
     signals.push('workspace_thread_text');
-  }
-  if (text.includes('加载中，请稍候') || text.includes('加载中') || titleText.includes('loading')) {
-    signals.push('workspace_loading_shell');
-  }
-  if (text.includes('详情') || headingText.includes('详情') || path.includes('/detail')) {
-    signals.push('workspace_detail');
-  }
-  if (text.includes('列表') || headingText.includes('列表') || path.includes('/list')) {
-    signals.push('workspace_list');
   }
 
   return [...new Set(signals)];
 }
 
-function classifyWorkspaceSurface(signals = [], { bodyText = '', headings = [], url = '' }) {
+function scoreWorkspaceSurface({ url, bodyText = '', headings = [] }) {
   const text = bodyText.toLowerCase();
   const headingText = headings.join(' ').toLowerCase();
   const path = getUrlPath(url);
+  let threadScore = 0;
+  let composerScore = 0;
+  let loadingScore = 0;
+  let detailScore = 0;
+  let listScore = 0;
 
-  if (signals.includes('workspace_loading_shell') || text.includes('加载中，请稍候') || text.includes('加载中')) {
+  if (path.includes('/chat') || path.includes('/thread') || path.includes('/conversation') || path.includes('/inbox')) {
+    threadScore += 3;
+  }
+  if (path.includes('/message') || path.includes('/msg')) {
+    threadScore += 2;
+  }
+  if (text.includes('消息')) {
+    threadScore += 1;
+  }
+  if (text.includes('聊天') || text.includes('对话')) {
+    threadScore += 1;
+  }
+  if (text.includes('按enter键发送')) {
+    composerScore += 3;
+  }
+  if (text.includes('发消息')) {
+    composerScore += 3;
+  }
+  if (text.includes('发送消息')) {
+    composerScore += 3;
+  }
+  if (text.includes('输入消息')) {
+    composerScore += 3;
+  }
+  if (text.includes('加载中，请稍候')) {
+    loadingScore += 2;
+  }
+  if (text.includes('详情') || headingText.includes('详情') || path.includes('/detail')) {
+    detailScore += 1;
+  }
+  if (text.includes('列表') || headingText.includes('列表') || path.includes('/list')) {
+    listScore += 1;
+  }
+
+  return { threadScore, composerScore, loadingScore, detailScore, listScore };
+}
+
+function classifyWorkspaceSurface(scores = {}) {
+  const { threadScore = 0, composerScore = 0, loadingScore = 0, detailScore = 0, listScore = 0 } = scores;
+
+  if (loadingScore > 0) {
     return 'loading_shell';
   }
-  if (
-    signals.includes('workspace_path') ||
-    signals.includes('workspace_thread_text') ||
-    path.includes('/chat') ||
-    path.includes('/thread') ||
-    path.includes('/conversation') ||
-    path.includes('/inbox') ||
-    text.includes('对话') ||
-    text.includes('聊天') ||
-    text.includes('消息')
-  ) {
-    return 'thread';
-  }
-  if (
-    signals.includes('workspace_message_path') ||
-    signals.includes('workspace_composer_text') ||
-    text.includes('按enter键发送') ||
-    text.includes('发消息') ||
-    text.includes('发送消息')
-  ) {
+  if (composerScore >= 2 && composerScore >= threadScore) {
     return 'composer';
   }
-  if (signals.includes('workspace_detail') || text.includes('详情') || headingText.includes('详情') || path.includes('/detail')) {
+  if (threadScore >= 2) {
+    return 'thread';
+  }
+  if (detailScore > 0) {
     return 'detail';
   }
-  if (signals.includes('workspace_list') || text.includes('列表') || headingText.includes('列表') || path.includes('/list')) {
+  if (listScore > 0) {
     return 'list';
   }
   return 'list';
+}
+
+function classifyWorkspaceRole({ url, bodyText = '', headings = [] }) {
+  const scores = scoreWorkspaceSurface({ url, bodyText, headings });
+  return Math.max(scores.threadScore, scores.composerScore) >= 2 ? scores : null;
 }
 
 function classifyPageRole({ url, title = '', bodyText = '', nodes = 0, forms = 0, navs = 0, headings = [] }) {
@@ -160,13 +192,13 @@ function classifyPageRole({ url, title = '', bodyText = '', nodes = 0, forms = 0
   const formHints = ['submit', 'required', 'email', 'message'];
   const headingText = headings.join(' ').toLowerCase();
   const checkpointSignals = detectCheckpointSignals({ url, title, bodyText, headings, nodes });
-  const workspaceSignals = detectWorkspaceSignals({ url, title, bodyText, headings });
+  const workspaceScores = classifyWorkspaceRole({ url, bodyText, headings });
 
   if (checkpointSignals.length > 0) {
     return 'checkpoint';
   }
 
-  if (workspaceSignals.length > 0) {
+  if (workspaceScores) {
     return 'workspace';
   }
 
@@ -235,7 +267,7 @@ export function applySnapshotToPageGraspState(
   });
   next.workspaceSignals = detectWorkspaceSignals({ url, title, bodyText, headings });
   next.currentRole = classifyPageRole({ url, title, bodyText, nodes, forms, navs, headings });
-  next.workspaceSurface = next.currentRole === 'workspace' ? classifyWorkspaceSurface(next.workspaceSignals, { bodyText, headings, url }) : null;
+  next.workspaceSurface = next.currentRole === 'workspace' ? classifyWorkspaceSurface(scoreWorkspaceSurface({ url, bodyText, headings })) : null;
   next.graspConfidence = classifyConfidence({ bodyText, nodes, urlChanged, domRevisionChanged });
 
   return next;
