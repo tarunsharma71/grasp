@@ -131,6 +131,31 @@ args = ["-y", "grasp"]
 
 ---
 
+## 安全真实表单任务
+
+当页面是真实表单时，优先使用表单任务流程：
+
+`form_inspect` -> `fill_form` / `set_option` / `set_date` -> `verify_form` -> `safe_submit`
+
+默认行为是保守的：
+
+- `fill_form` 只写 `safe` 字段
+- `review` 和 `sensitive` 字段会保留出来，便于显式查看
+- `safe_submit` 默认先走 preview，先看阻塞项再决定是否真正提交
+
+表单任务参考：[docs/reference/mcp-tools.md](./docs/reference/mcp-tools.md)
+
+---
+
+## 动态认证任务流
+
+当当前页面是动态认证 workspace 时，使用 `workspace_inspect -> select_live_item -> draft_action -> execute_action -> verify_outcome`。
+默认情况下，Grasp 会先草拟内容，对不可逆操作要求显式确认，并验证 workspace 是否真的进入了下一状态。
+
+Workspace 任务参考：[docs/reference/mcp-tools.md](./docs/reference/mcp-tools.md)
+
+---
+
 ## 高级运行时原语
 
 高层网关工具是默认入口；需要更细粒度控制时，底层运行时原语仍然保留。

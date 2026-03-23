@@ -183,6 +183,11 @@ export async function assessGatewayContinuation(page, state) {
   }
 
   const continuation = await assessResumeContinuation(page, state, anchors);
+  const suggestedDirectAction = pageState.currentRole === 'form'
+    ? 'form_inspect'
+    : pageState.currentRole === 'workspace'
+      ? 'workspace_inspect'
+      : continuation.suggested_next_action;
 
   if (handoffState === 'resumed_verified' || handoffState === 'resumed_unverified') {
     if (continuation.task_continuation_ok === false) {
@@ -201,6 +206,7 @@ export async function assessGatewayContinuation(page, state) {
         status: 'resumed',
         continuation: {
           ...continuation,
+          suggested_next_action: suggestedDirectAction,
           can_continue: true,
           handoff_state: handoffState,
         },
@@ -232,6 +238,7 @@ export async function assessGatewayContinuation(page, state) {
     status: 'direct',
     continuation: {
       ...continuation,
+      suggested_next_action: suggestedDirectAction,
       can_continue: true,
       handoff_state: handoffState,
     },

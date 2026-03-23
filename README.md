@@ -125,6 +125,33 @@ Product story: [docs/product/ai-browser-gateway.md](./docs/product/ai-browser-ga
 
 ---
 
+## Safe Real Form Tasks
+
+When the page is a real form, use the form-task flow:
+
+`form_inspect` -> `fill_form` / `set_option` / `set_date` -> `verify_form` -> `safe_submit`
+
+The default behavior is conservative:
+
+- `fill_form` only writes safe fields
+- `review` and `sensitive` fields stay visible so you can inspect them explicitly
+- `safe_submit` starts with preview, so you can check blockers before any real submit
+
+Form-task reference: [docs/reference/mcp-tools.md](./docs/reference/mcp-tools.md)
+
+---
+
+## Dynamic Authenticated Task Flows
+
+Use `workspace_inspect -> select_live_item -> draft_action -> execute_action -> verify_outcome`
+when the current page is a dynamic authenticated workspace. By default Grasp drafts first,
+requires explicit confirmation for irreversible actions, and verifies that the workspace really
+moved to the next state.
+
+Workspace task reference: [docs/reference/mcp-tools.md](./docs/reference/mcp-tools.md)
+
+---
+
 ## Advanced Runtime Primitives
 
 The gateway tools are the public default. The lower-level runtime is still available when you need tighter control.

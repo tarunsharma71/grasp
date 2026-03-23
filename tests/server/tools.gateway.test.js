@@ -227,6 +227,62 @@ test('continue returns handoff guidance when the page is gated', async () => {
   assert.equal(result.meta.continuation.suggested_next_action, 'request_handoff');
 });
 
+test('continue suggests form_inspect on direct form pages', async () => {
+  const calls = [];
+  const server = { registerTool(name, spec, handler) { calls.push({ name, handler }); } };
+  const page = createFakePage({
+    url: () => 'https://example.com/form',
+    title: () => 'Form',
+  });
+  const state = {
+    pageState: { currentRole: 'form', graspConfidence: 'high', riskGateDetected: false },
+    handoff: { state: 'idle' },
+  };
+
+  registerGatewayTools(server, state, {
+    getActivePage: async () => page,
+    syncPageState: async (_page, currentState) => {
+      currentState.pageState = state.pageState;
+      return currentState;
+    },
+  });
+
+  const continueTool = calls.find((tool) => tool.name === 'continue');
+  const result = await continueTool.handler();
+
+  assert.equal(result.meta.status, 'direct');
+  assert.equal(result.meta.continuation.can_continue, true);
+  assert.equal(result.meta.continuation.suggested_next_action, 'form_inspect');
+});
+
+test('continue suggests workspace_inspect on direct workspace pages', async () => {
+  const calls = [];
+  const server = { registerTool(name, spec, handler) { calls.push({ name, handler }); } };
+  const page = createFakePage({
+    url: () => 'https://example.com/workspace',
+    title: () => 'Workspace',
+  });
+  const state = {
+    pageState: { currentRole: 'workspace', graspConfidence: 'high', riskGateDetected: false },
+    handoff: { state: 'idle' },
+  };
+
+  registerGatewayTools(server, state, {
+    getActivePage: async () => page,
+    syncPageState: async (_page, currentState) => {
+      currentState.pageState = state.pageState;
+      return currentState;
+    },
+  });
+
+  const continueTool = calls.find((tool) => tool.name === 'continue');
+  const result = await continueTool.handler();
+
+  assert.equal(result.meta.status, 'direct');
+  assert.equal(result.meta.continuation.can_continue, true);
+  assert.equal(result.meta.continuation.suggested_next_action, 'workspace_inspect');
+});
+
 test('smoke: entry returns direct on a direct page', async () => {
   const calls = [];
   const server = { registerTool(name, spec, handler) { calls.push({ name, handler }); } };

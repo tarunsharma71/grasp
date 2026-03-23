@@ -1,9 +1,11 @@
 # MCP Tools
 
-Grasp exposes two layers:
+Grasp exposes three layers:
 
 - gateway tools for the default product workflow
-- advanced runtime primitives for tighter manual control
+- form-task tools for safe real form tasks
+- workspace-task tools for dynamic authenticated workspaces
+- runtime primitives for tighter manual control
 
 ---
 
@@ -27,7 +29,47 @@ Manual smoke playbook: [docs/reference/smoke-paths.md](./smoke-paths.md)
 
 ---
 
-## Advanced Runtime Primitives
+## Form-Task Tools
+
+| Tool | What it is for |
+|:---|:---|
+| `form_inspect` | Inspect the visible form, return fields, sections, summary, and ambiguity evidence. |
+| `fill_form` | Fill safe text-like fields and return refreshed form state. |
+| `set_option` | Set review-tier option fields such as selects and comparable controls. |
+| `set_date` | Set review-tier date fields. |
+| `verify_form` | Re-read the form and report completion status and remaining blockers. |
+| `safe_submit` | Preview or confirm form submission with blocker reporting. |
+
+Recommended form flow:
+
+1. `form_inspect`
+2. `fill_form` / `set_option` / `set_date`
+3. `verify_form`
+4. `safe_submit`
+
+---
+
+## Workspace-Task Tools
+
+| Tool | What it is for |
+|:---|:---|
+| `workspace_inspect` | Inspect the current authenticated workspace surface, live items, composer state, and blockers. |
+| `select_live_item` | Select a visible workspace item by semantic label and return the refreshed workspace state. |
+| `draft_action` | Draft text into the current workspace composer without sending it. |
+| `execute_action` | Preview or confirm the guarded workspace send action. |
+| `verify_outcome` | Re-read the workspace and report the current outcome signals and next step. |
+
+Recommended workspace flow:
+
+1. `workspace_inspect`
+2. `select_live_item`
+3. `draft_action`
+4. `execute_action`
+5. `verify_outcome`
+
+---
+
+## Runtime Primitives
 
 ### Navigation and state
 
