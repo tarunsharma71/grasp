@@ -340,3 +340,153 @@ test('workspace action tools select live items directly while draft and execute 
   assert.equal(gatedResult.meta.result.snapshot.live_items[0].normalized_label, undefined);
   assert.deepEqual(gatedMutations, []);
 });
+
+test('select_live_item exposes unresolved reasons in the public response', async () => {
+  const cases = [
+    {
+      name: 'ambiguous_item',
+      state: {
+        pageState: { currentRole: 'workspace', workspaceSurface: 'thread', graspConfidence: 'high', riskGateDetected: false },
+        handoff: { state: 'idle' },
+      },
+      snapshot: async () => ({
+        workspace_surface: 'thread',
+        live_items: [
+          { label: '李女士', selected: false, hint_id: 'L1', normalized_label: '李女士' },
+          { label: '李女士', selected: false, hint_id: 'L2', normalized_label: '李女士' },
+        ],
+        active_item: null,
+        composer: { kind: 'chat_composer', draft_present: false },
+        action_controls: [],
+        blocking_modals: [],
+        loading_shell: false,
+        summary: { active_item_label: null, draft_present: false, loading_shell: false },
+      }),
+      expectedReason: 'ambiguous_item',
+    },
+    {
+      name: 'not_in_visible_window',
+      state: {
+        pageState: { currentRole: 'workspace', workspaceSurface: 'thread', graspConfidence: 'high', riskGateDetected: false },
+        handoff: { state: 'idle' },
+      },
+      snapshot: async () => ({
+        workspace_surface: 'thread',
+        live_items: [
+          { label: '胡女士', selected: false, hint_id: 'L2', normalized_label: '胡女士' },
+        ],
+        active_item: null,
+        composer: { kind: 'chat_composer', draft_present: false },
+        action_controls: [],
+        blocking_modals: [],
+        loading_shell: false,
+        summary: { active_item_label: null, draft_present: false, loading_shell: false },
+      }),
+      expectedReason: 'not_in_visible_window',
+    },
+    {
+      name: 'virtualized_window_changed',
+      state: {
+        pageState: { currentRole: 'workspace', workspaceSurface: 'thread', graspConfidence: 'high', riskGateDetected: false },
+        handoff: { state: 'idle' },
+      },
+      snapshot: (() => {
+        let calls = 0;
+        return async () => {
+          calls += 1;
+          if (calls === 1) {
+            return {
+              workspace_surface: 'thread',
+              live_items: [
+                { label: '李女士', selected: false, hint_id: 'L1', normalized_label: '李女士' },
+              ],
+              active_item: null,
+              composer: { kind: 'chat_composer', draft_present: false },
+              action_controls: [],
+              blocking_modals: [],
+              loading_shell: false,
+              summary: { active_item_label: null, draft_present: false, loading_shell: false },
+            };
+          }
+
+          return {
+            workspace_surface: 'thread',
+            live_items: [
+              { label: '李女士', selected: true, hint_id: 'L2', normalized_label: '李女士' },
+            ],
+            active_item: { label: '李女士', selected: true, hint_id: 'L2', normalized_label: '李女士' },
+            detail_alignment: 'aligned',
+            selection_window: 'visible',
+            composer: { kind: 'chat_composer', draft_present: false },
+            action_controls: [],
+            blocking_modals: [],
+            loading_shell: false,
+            summary: { active_item_label: '李女士', draft_present: false, loading_shell: false },
+          };
+        };
+      })(),
+      expectedReason: 'virtualized_window_changed',
+    },
+    {
+      name: 'detail_panel_mismatch',
+      state: {
+        pageState: { currentRole: 'workspace', workspaceSurface: 'thread', graspConfidence: 'high', riskGateDetected: false },
+        handoff: { state: 'idle' },
+      },
+      snapshot: (() => {
+        let calls = 0;
+        return async () => {
+          calls += 1;
+          if (calls === 1) {
+            return {
+              workspace_surface: 'thread',
+              live_items: [
+                { label: '李女士', selected: false, hint_id: 'L1', normalized_label: '李女士' },
+              ],
+              active_item: null,
+              composer: { kind: 'chat_composer', draft_present: false },
+              action_controls: [],
+              blocking_modals: [],
+              loading_shell: false,
+              summary: { active_item_label: null, draft_present: false, loading_shell: false },
+            };
+          }
+
+          return {
+            workspace_surface: 'thread',
+            live_items: [
+              { label: '李女士', selected: true, hint_id: 'L1', normalized_label: '李女士' },
+            ],
+            active_item: { label: '李女士', selected: true, hint_id: 'L1', normalized_label: '李女士' },
+            detail_alignment: 'mismatch',
+            selection_window: 'visible',
+            composer: { kind: 'chat_composer', draft_present: false },
+            action_controls: [],
+            blocking_modals: [],
+            loading_shell: false,
+            summary: { active_item_label: '李女士', draft_present: false, loading_shell: false },
+          };
+        };
+      })(),
+      expectedReason: 'detail_panel_mismatch',
+    },
+  ];
+
+  for (const testCase of cases) {
+    const calls = [];
+    const server = { registerTool(name, spec, handler) { calls.push({ name, handler }); } };
+
+    registerWorkspaceTools(server, testCase.state, {
+      getActivePage: async () => ({ title: async () => 'BOSS直聘', url: () => 'https://www.zhipin.com/web/geek/chat?id=1' }),
+      syncPageState: async () => undefined,
+      collectVisibleWorkspaceSnapshot: testCase.snapshot,
+      selectLiveItem: async () => ({ ok: true }),
+    });
+
+    const result = await calls.find((entry) => entry.name === 'select_live_item').handler({ item: '李女士' });
+
+    assert.equal(result.meta.result.status, 'unresolved', testCase.name);
+    assert.equal(result.meta.result.unresolved.reason, testCase.expectedReason, testCase.name);
+    assert.equal(result.meta.result.selection_evidence.recovery_hint, result.meta.result.unresolved.recovery_hint, testCase.name);
+  }
+});

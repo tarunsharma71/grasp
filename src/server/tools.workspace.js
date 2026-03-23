@@ -131,6 +131,16 @@ function toPublicSelectionEvidence(evidence, selected = false) {
   };
 }
 
+function toPublicSelectionUnresolved(unresolved) {
+  if (!unresolved) return null;
+
+  return {
+    reason: unresolved.reason ?? 'unknown',
+    requested_label: String(unresolved.requested_label ?? '').replace(/\s+/g, ' ').trim(),
+    recovery_hint: unresolved.recovery_hint ?? null,
+  };
+}
+
 function toPublicWorkspaceSummary(summary, snapshot) {
   const blockingModalLabels = Array.isArray(summary?.blocking_modal_labels)
     ? summary.blocking_modal_labels
@@ -377,6 +387,7 @@ export function registerWorkspaceTools(server, state, deps = {}) {
       const publicSelectedItem = toPublicSelectionItem(selection.selected_item, selection.status === 'selected');
       const publicActiveItem = toPublicActiveItem(selection.active_item);
       const publicSelectionEvidence = toPublicSelectionEvidence(selection.selection_evidence, selection.status === 'selected');
+      const publicUnresolved = toPublicSelectionUnresolved(selection.unresolved);
 
       return buildGatewayResponse({
         status,
@@ -389,6 +400,7 @@ export function registerWorkspaceTools(server, state, deps = {}) {
           detail_alignment: selection.detail_alignment,
           snapshot: publicSnapshot,
           selection_evidence: publicSelectionEvidence,
+          unresolved: publicUnresolved,
           action: {
             kind: 'select_live_item',
             status: selection.status,
