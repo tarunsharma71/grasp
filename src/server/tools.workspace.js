@@ -52,13 +52,7 @@ function getActiveItem(snapshot) {
 }
 
 function getSendLikeActionControls(snapshot) {
-  return getActionControls(snapshot).filter((control) => {
-    const label = String(control?.label ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
-    return label.includes('发送')
-      || label.includes('send')
-      || label.includes('回复')
-      || label.includes('提交');
-  });
+  return getActionControls(snapshot).filter((control) => control?.action_kind === 'send');
 }
 
 function isActiveItemStable(snapshot, summary) {

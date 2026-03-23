@@ -202,6 +202,37 @@ test('workspace_inspect does not suggest execute_action when blockers are visibl
   assert.equal(missingSendResult.meta.continuation.suggested_next_action, 'draft_action');
 });
 
+test('workspace_inspect does not suggest execute_action for label-only send-like controls', async () => {
+  const calls = [];
+  const server = { registerTool(name, spec, handler) { calls.push({ name, handler }); } };
+  const state = {
+    pageState: { currentRole: 'workspace', workspaceSurface: 'thread', graspConfidence: 'high', riskGateDetected: false },
+    handoff: { state: 'idle' },
+  };
+
+  registerWorkspaceTools(server, state, {
+    getActivePage: async () => ({ title: async () => 'BOSS直聘', url: () => 'https://www.zhipin.com/web/geek/chat?id=1' }),
+    syncPageState: async () => undefined,
+    collectVisibleWorkspaceSnapshot: async () => ({
+      workspace_surface: 'thread',
+      live_items: [{ label: '李女士', selected: true }],
+      active_item: { label: '李女士' },
+      composer: { kind: 'chat_composer', draft_present: true },
+      action_controls: [
+        { label: '发送', action_kind: 'button' },
+        { label: '提交', action_kind: 'button' },
+        { label: '回复', action_kind: 'button' },
+      ],
+      blocking_modals: [],
+      loading_shell: false,
+      summary: { active_item_label: '李女士', draft_present: true, loading_shell: false, outcome_signals: { active_item_stable: true } },
+    }),
+  });
+
+  const result = await calls.find((entry) => entry.name === 'workspace_inspect').handler({});
+  assert.equal(result.meta.continuation.suggested_next_action, 'draft_action');
+});
+
 test('workspace action tools select live items directly while draft_action drafts directly and execute_action confirms explicitly', async () => {
   const directCalls = [];
   const directServer = { registerTool(name, spec, handler) { directCalls.push({ name, handler }); } };
