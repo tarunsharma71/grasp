@@ -988,7 +988,6 @@ export async function executeWorkspaceAction(runtime, options = {}) {
         page,
         kind: 'execute_action',
         target: 'send',
-        hintId: sendControl.hint_id,
         outcomeSignals: refreshedSnapshot?.outcome_signals ?? null,
         snapshot: refreshedSnapshot,
       });

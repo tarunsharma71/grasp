@@ -829,3 +829,64 @@ test('executeWorkspaceAction returns failed when the outcome cannot be verified'
   assert.equal(result.action.status, 'failed');
   assert.equal(result.failure.error_code, 'ACTION_NOT_VERIFIED');
 });
+
+test('executeWorkspaceAction fails when generic verification would succeed but send-specific outcome is absent', async () => {
+  let executed = false;
+  let sawHintId = false;
+
+  const result = await executeWorkspaceAction({
+    state: {
+      pageState: { currentRole: 'workspace', workspaceSurface: 'thread', graspConfidence: 'high', riskGateDetected: false },
+      handoff: { state: 'idle' },
+    },
+    snapshot: {
+      workspace_surface: 'thread',
+      action_controls: [{ label: '发送', action_kind: 'send', hint_id: 'B1' }],
+      composer: { kind: 'chat_composer', draft_present: true },
+      live_items: [{ label: '李女士', selected: true }],
+      active_item: { label: '李女士' },
+      summary: { active_item_label: '李女士', draft_present: true, loading_shell: false },
+    },
+    clickByHintId: async () => ({ ok: true }),
+    executeGuardedAction: async ({ execute, verify }) => {
+      executed = true;
+      const executionResult = await execute();
+      return verify({
+        executionResult,
+        snapshot: {
+          workspace_surface: 'thread',
+          action_controls: [{ label: '发送', action_kind: 'send', hint_id: 'B1' }],
+          composer: { kind: 'chat_composer', draft_present: true },
+          live_items: [{ label: '李女士', selected: true }],
+          active_item: { label: '李女士' },
+          outcome_signals: {
+            delivered: false,
+            composer_cleared: false,
+            active_item_stable: false,
+          },
+          summary: { active_item_label: '李女士', draft_present: true, loading_shell: false },
+        },
+      });
+    },
+    verifyActionOutcome: async (args) => {
+      sawHintId = args.hintId != null;
+      if (args.hintId) {
+        return { ok: true, evidence: { generic: true } };
+      }
+
+      return {
+        ok: false,
+        error_code: 'ACTION_NOT_VERIFIED',
+        retryable: true,
+        suggested_next_step: 'reverify',
+        evidence: { generic: false },
+      };
+    },
+  }, { action: 'send', mode: 'confirm', confirmation: 'EXECUTE' });
+
+  assert.equal(executed, true);
+  assert.equal(sawHintId, false);
+  assert.equal(result.status, 'failed');
+  assert.equal(result.action.status, 'failed');
+  assert.equal(result.failure.error_code, 'ACTION_NOT_VERIFIED');
+});
