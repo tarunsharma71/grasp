@@ -4,6 +4,7 @@ import { createFakePage } from '../helpers/fake-page.js';
 import {
   classifyWorkspaceSurface,
   collectVisibleWorkspaceSnapshot,
+  buildWorkspaceVerification,
   summarizeWorkspaceSnapshot,
 } from '../../src/server/workspace-tasks.js';
 
@@ -319,4 +320,30 @@ test('summarizeWorkspaceSnapshot keeps active item unstable when selection windo
 
   assert.equal(summary.selection_window, 'not_found');
   assert.equal(summary.outcome_signals.active_item_stable, false);
+});
+
+test('buildWorkspaceVerification returns active item, draft, delivery, blocking, and readiness fields', () => {
+  const result = buildWorkspaceVerification({
+    workspace_surface: 'thread',
+    active_item: { label: '李女士' },
+    composer: { kind: 'chat_composer', draft_present: false },
+    action_controls: [{ label: '发送', action_kind: 'send' }],
+    outcome_signals: { delivered: true, composer_cleared: true, active_item_stable: true },
+    blocking_modals: [{ label: '权限提示' }],
+    loading_shell: false,
+    detail_alignment: 'aligned',
+  });
+
+  assert.equal(result.active_item_label, '李女士');
+  assert.equal(result.draft_present, false);
+  assert.equal(result.delivered, true);
+  assert.equal(result.loading_shell, false);
+  assert.equal(result.blocking_modal_present, true);
+  assert.equal(result.detail_alignment, 'aligned');
+  assert.deepEqual(result.outcome_signals, {
+    delivered: true,
+    composer_cleared: true,
+    active_item_stable: true,
+  });
+  assert.equal(result.ready_for_next_action, 'draft_action');
 });

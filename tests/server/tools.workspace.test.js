@@ -875,3 +875,192 @@ test('draft_action exposes public-safe unresolved and failed responses', async (
     }
   }
 });
+
+test('verify_outcome returns verification fields and suggested next action branches', async () => {
+  const cases = [
+    {
+      name: 'loading_shell',
+      expectedActiveItemLabel: null,
+      snapshot: async () => ({
+        workspace_surface: 'loading_shell',
+        live_items: [],
+        active_item: null,
+        composer: null,
+        action_controls: [],
+        blocking_modals: [],
+        loading_shell: true,
+        detail_alignment: 'unknown',
+        outcome_signals: { delivered: false, composer_cleared: false, active_item_stable: false },
+        summary: {
+          active_item_label: null,
+          draft_present: false,
+          loading_shell: true,
+          blocking_modal_present: false,
+          detail_alignment: 'unknown',
+          outcome_signals: { delivered: false, composer_cleared: false, active_item_stable: false },
+          ready_for_next_action: 'workspace_inspect',
+        },
+      }),
+      expectedNextAction: 'workspace_inspect',
+    },
+    {
+      name: 'detail_mismatch',
+      expectedActiveItemLabel: '李女士',
+      snapshot: async () => ({
+        workspace_surface: 'thread',
+        live_items: [{ label: '李女士', selected: true }],
+        active_item: { label: '李女士' },
+        detail_panel: { label: '王先生' },
+        detail_alignment: 'mismatch',
+        composer: { kind: 'chat_composer', draft_present: false },
+        action_controls: [{ label: '发送', action_kind: 'send' }],
+        blocking_modals: [],
+        loading_shell: false,
+        outcome_signals: { delivered: false, composer_cleared: false, active_item_stable: false },
+        summary: {
+          active_item_label: '李女士',
+          draft_present: false,
+          loading_shell: false,
+          blocking_modal_present: false,
+          detail_alignment: 'mismatch',
+          outcome_signals: { delivered: false, composer_cleared: false, active_item_stable: false },
+          ready_for_next_action: 'select_live_item',
+        },
+      }),
+      expectedNextAction: 'select_live_item',
+    },
+    {
+      name: 'no_active_item',
+      expectedActiveItemLabel: null,
+      snapshot: async () => ({
+        workspace_surface: 'thread',
+        live_items: [{ label: '李女士', selected: false }],
+        active_item: null,
+        composer: { kind: 'chat_composer', draft_present: false },
+        action_controls: [{ label: '发送', action_kind: 'send' }],
+        blocking_modals: [],
+        loading_shell: false,
+        detail_alignment: 'unknown',
+        outcome_signals: { delivered: false, composer_cleared: false, active_item_stable: false },
+        summary: {
+          active_item_label: null,
+          draft_present: false,
+          loading_shell: false,
+          blocking_modal_present: false,
+          detail_alignment: 'unknown',
+          outcome_signals: { delivered: false, composer_cleared: false, active_item_stable: false },
+          ready_for_next_action: 'select_live_item',
+        },
+      }),
+      expectedNextAction: 'select_live_item',
+    },
+    {
+      name: 'draft_present',
+      expectedActiveItemLabel: '李女士',
+      snapshot: async () => ({
+        workspace_surface: 'thread',
+        live_items: [{ label: '李女士', selected: true }],
+        active_item: { label: '李女士' },
+        composer: { kind: 'chat_composer', draft_present: true, draft_text: '你好' },
+        action_controls: [{ label: '发送', action_kind: 'send' }],
+        blocking_modals: [],
+        loading_shell: false,
+        detail_alignment: 'aligned',
+        outcome_signals: { delivered: false, composer_cleared: false, active_item_stable: true },
+        summary: {
+          active_item_label: '李女士',
+          draft_present: true,
+          loading_shell: false,
+          blocking_modal_present: false,
+          detail_alignment: 'aligned',
+          outcome_signals: { delivered: false, composer_cleared: false, active_item_stable: true },
+          ready_for_next_action: 'execute_action',
+        },
+      }),
+      expectedNextAction: 'execute_action',
+    },
+  ];
+
+  for (const testCase of cases) {
+    const calls = [];
+    const state = {
+      pageState: { currentRole: 'workspace', workspaceSurface: 'thread', graspConfidence: 'high', riskGateDetected: false },
+      handoff: { state: 'idle' },
+    };
+
+    const server = { registerTool(name, spec, handler) { calls.push({ name, spec, handler }); } };
+    registerWorkspaceTools(server, state, {
+      getActivePage: async () => ({ title: async () => 'BOSS直聘', url: () => 'https://www.zhipin.com/web/geek/chat?id=1' }),
+      syncPageState: async () => undefined,
+      collectVisibleWorkspaceSnapshot: testCase.snapshot,
+    });
+
+    const tool = calls.find((entry) => entry.name === 'verify_outcome');
+    const result = await tool.handler({});
+
+    assert.equal(result.meta.result.verification.ready_for_next_action, testCase.expectedNextAction, testCase.name);
+    assert.equal(result.meta.continuation.suggested_next_action, testCase.expectedNextAction, testCase.name);
+    assert.equal(result.meta.result.verification.active_item_label, testCase.expectedActiveItemLabel, testCase.name);
+    assert.equal(result.meta.result.verification.blocking_modal_present, false, testCase.name);
+  }
+});
+
+test('verify_outcome preserves blocked and gated safety behavior without mutating state', async () => {
+  const cases = [
+    { handoffState: 'handoff_required', expectedStatus: 'handoff_required' },
+    { handoffState: 'handoff_in_progress', expectedStatus: 'handoff_required' },
+    { handoffState: 'awaiting_reacquisition', expectedStatus: 'handoff_required' },
+    { handoffState: 'idle', riskGateDetected: true, expectedStatus: 'gated' },
+  ];
+
+  for (const testCase of cases) {
+    const calls = [];
+    const state = {
+      pageState: {
+        currentRole: 'workspace',
+        workspaceSurface: 'thread',
+        graspConfidence: 'high',
+        riskGateDetected: testCase.riskGateDetected === true,
+      },
+      handoff: { state: testCase.handoffState },
+    };
+    const mutations = [];
+
+    const server = { registerTool(name, spec, handler) { calls.push({ name, spec, handler }); } };
+    registerWorkspaceTools(server, state, {
+      getActivePage: async () => ({ title: async () => 'BOSS直聘', url: () => 'https://www.zhipin.com/web/geek/chat?id=1' }),
+      syncPageState: async () => undefined,
+      collectVisibleWorkspaceSnapshot: async () => ({
+        workspace_surface: 'thread',
+        live_items: [{ label: '李女士', selected: true }],
+        active_item: { label: '李女士' },
+        composer: { kind: 'chat_composer', draft_present: true },
+        action_controls: [{ label: '发送', action_kind: 'send' }],
+        blocking_modals: [],
+        loading_shell: false,
+        detail_alignment: 'aligned',
+        outcome_signals: { delivered: false, composer_cleared: false, active_item_stable: true },
+        summary: {
+          active_item_label: '李女士',
+          draft_present: true,
+          loading_shell: false,
+          blocking_modal_present: false,
+          detail_alignment: 'aligned',
+          outcome_signals: { delivered: false, composer_cleared: false, active_item_stable: true },
+          ready_for_next_action: 'execute_action',
+        },
+      }),
+      selectLiveItem: async () => mutations.push('select'),
+      draftWorkspaceAction: async () => mutations.push('draft'),
+      executeWorkspaceAction: async () => mutations.push('execute'),
+    });
+
+    const before = JSON.parse(JSON.stringify(state));
+    const result = await calls.find((entry) => entry.name === 'verify_outcome').handler({});
+
+    assert.equal(result.meta.status, testCase.expectedStatus);
+    assert.equal(result.meta.continuation.suggested_next_action, 'request_handoff');
+    assert.deepEqual(state, before);
+    assert.deepEqual(mutations, []);
+  }
+});

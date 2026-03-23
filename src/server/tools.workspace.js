@@ -4,7 +4,7 @@ import { buildGatewayResponse } from './gateway-response.js';
 import { getActivePage } from '../layer1-bridge/chrome.js';
 import { clickByHintId } from '../layer3-action/actions.js';
 import { syncPageState } from './state.js';
-import { collectVisibleWorkspaceSnapshot, getWorkspaceContinuation, getWorkspaceStatus, summarizeWorkspaceSnapshot } from './workspace-tasks.js';
+import { buildWorkspaceVerification, collectVisibleWorkspaceSnapshot, getWorkspaceContinuation, getWorkspaceStatus, summarizeWorkspaceSnapshot } from './workspace-tasks.js';
 import { draftWorkspaceAction, executeWorkspaceAction, selectWorkspaceItem } from './workspace-runtime.js';
 
 function toGatewayPage(page, state) {
@@ -539,6 +539,50 @@ function registerWorkspaceExecuteActionTool(server, state, deps) {
   );
 }
 
+function registerWorkspaceVerifyOutcomeTool(server, state, deps) {
+  const getPage = deps.getActivePage ?? getActivePage;
+  const syncState = deps.syncPageState ?? syncPageState;
+  const collectSnapshot = deps.collectVisibleWorkspaceSnapshot ?? collectVisibleWorkspaceSnapshot;
+
+  server.registerTool(
+    'verify_outcome',
+    {
+      description: 'Rebuild a fresh workspace snapshot, verify the current outcome, and suggest the next step.',
+      inputSchema: {},
+    },
+    async () => {
+      const page = await getPage();
+      const { snapshot, workspaceSurface } = await loadWorkspacePageContext(page, state, syncState, collectSnapshot);
+      const verification = buildWorkspaceVerification(snapshot);
+      const suggestedNextAction = verification.ready_for_next_action;
+      const pageInfoAfter = {
+        title: await page.title(),
+        url: page.url(),
+      };
+
+      return buildGatewayResponse({
+        status: getWorkspaceStatus(state),
+        page: toGatewayPage(pageInfoAfter, state),
+        result: {
+          task_kind: 'workspace',
+          verification,
+          suggested_next_action: suggestedNextAction,
+          summary: `Workspace ${workspaceSurface} • ${verification.active_item_label ?? 'no active item'}`,
+        },
+        continuation: getWorkspaceContinuation(state, suggestedNextAction),
+        evidence: {
+          workspace_surface: workspaceSurface,
+          active_item_label: verification.active_item_label,
+          loading_shell: verification.loading_shell,
+          blocking_modal_present: verification.blocking_modal_present,
+          detail_alignment: verification.detail_alignment,
+          ready_for_next_action: verification.ready_for_next_action,
+        },
+      });
+    }
+  );
+}
+
 export function registerWorkspaceTools(server, state, deps = {}) {
   const getPage = deps.getActivePage ?? getActivePage;
   const syncState = deps.syncPageState ?? syncPageState;
@@ -666,4 +710,5 @@ export function registerWorkspaceTools(server, state, deps = {}) {
   );
   registerWorkspaceDraftActionTool(server, state, deps);
   registerWorkspaceExecuteActionTool(server, state, deps);
+  registerWorkspaceVerifyOutcomeTool(server, state, deps);
 }

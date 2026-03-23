@@ -299,6 +299,44 @@ export function summarizeWorkspaceSnapshot(snapshot = {}) {
   };
 }
 
+export function buildWorkspaceVerification(snapshot = {}) {
+  const summary = summarizeWorkspaceSnapshot(snapshot);
+  const activeItemLabel = summary.active_item_label ?? null;
+  const draftPresent = summary.draft_present === true;
+  const delivered = summary.outcome_signals?.delivered === true;
+  const loadingShell = summary.loading_shell === true;
+  const blockingModalPresent = summary.blocking_modal_count > 0;
+  const detailAlignment = summary.detail_alignment ?? 'unknown';
+  const outcomeSignals = summary.outcome_signals ?? {
+    delivered: false,
+    composer_cleared: false,
+    active_item_stable: false,
+  };
+  const workspaceSurface = summary.workspace_surface ?? pick(snapshot, 'workspaceSurface', 'workspace_surface', null);
+  const readyForNextAction = loadingShell
+    ? 'workspace_inspect'
+    : detailAlignment === 'mismatch'
+      ? 'select_live_item'
+      : !activeItemLabel
+        ? 'select_live_item'
+        : draftPresent
+          ? 'execute_action'
+          : workspaceSurface === 'thread'
+            ? 'draft_action'
+            : 'workspace_inspect';
+
+  return {
+    active_item_label: activeItemLabel,
+    draft_present: draftPresent,
+    delivered,
+    loading_shell: loadingShell,
+    blocking_modal_present: blockingModalPresent,
+    detail_alignment: detailAlignment,
+    outcome_signals: outcomeSignals,
+    ready_for_next_action: readyForNextAction,
+  };
+}
+
 export async function collectVisibleWorkspaceSnapshot(page, state) {
   const rawSnapshot = await page.evaluate(() => {
     if (typeof document === 'undefined') {
