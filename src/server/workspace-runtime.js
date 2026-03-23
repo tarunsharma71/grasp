@@ -32,7 +32,8 @@ function getWorkspaceSurface(snapshot) {
 }
 
 function isLoadingShell(snapshot) {
-  return pick(snapshot, 'loadingShell', 'loading_shell', false) === true || getWorkspaceSurface(snapshot) === 'loading_shell';
+  return pick(snapshot, 'loadingShell', 'loading_shell', false) === true
+    || getWorkspaceSurface(snapshot) === 'loading_shell';
 }
 
 function buildUnresolved(reason, requestedLabel, matches = []) {
@@ -164,21 +165,55 @@ export function createWorkspaceWriteEvidence({ kind, target }) {
 }
 
 export async function verifySelectionResult({
-  page,
-  hintId,
-  prevDomRevision,
-  prevUrl,
-  prevActiveId,
-  newDomRevision,
+  snapshot,
+  item,
 }) {
-  return verifyGenericAction({
-    page,
-    hintId,
-    prevDomRevision,
-    prevUrl,
-    prevActiveId,
-    newDomRevision,
-  });
+  const summary = summarizeWorkspaceSnapshot(snapshot ?? {});
+  const liveItems = getLiveItems(snapshot);
+  const normalizedLabel = normalizeLabel(item?.label);
+  const activeItem = pick(snapshot, 'activeItem', 'active_item', null);
+  const activeLabel = compactText(activeItem?.label ?? summary.active_item_label ?? '');
+  const activeMatch = normalizeLabel(activeLabel) === normalizedLabel;
+  const selectedMatch = liveItems.some((liveItem) => (
+    liveItem?.selected === true
+    && normalizeLabel(liveItem?.normalized_label ?? liveItem?.label) === normalizedLabel
+    && compactText(liveItem?.hint_id) === compactText(item?.hint_id)
+  ));
+  const detailAlignment = pick(snapshot, 'detailAlignment', 'detail_alignment', summary.detail_alignment);
+  const selectionWindow = pick(snapshot, 'selectionWindow', 'selection_window', summary.selection_window);
+
+  if ((activeMatch || selectedMatch) && detailAlignment !== 'mismatch' && selectionWindow !== 'not_found') {
+    return {
+      ok: true,
+      evidence: {
+        target: item?.label ?? null,
+        hint_id: item?.hint_id ?? null,
+        active_item_label: activeLabel || null,
+        detail_alignment: detailAlignment,
+        selection_window: selectionWindow,
+        active_match: activeMatch,
+        selected_match: selectedMatch,
+        summary: summary.summary,
+      },
+    };
+  }
+
+  return {
+    ok: false,
+    error_code: ACTION_NOT_VERIFIED,
+    retryable: true,
+    suggested_next_step: 'reverify',
+    evidence: {
+      target: item?.label ?? null,
+      hint_id: item?.hint_id ?? null,
+      active_item_label: activeLabel || null,
+      detail_alignment: detailAlignment,
+      selection_window: selectionWindow,
+      active_match: activeMatch,
+      selected_match: selectedMatch,
+      summary: summary.summary,
+    },
+  };
 }
 
 export async function verifyActionOutcome({
@@ -193,14 +228,20 @@ export async function verifyActionOutcome({
   prevActiveId = null,
   newDomRevision = null,
   outcomeSignals = null,
+  snapshot = null,
 }) {
-  if (outcomeSignals?.loading_shell) {
+  const loadingShell = snapshot
+    ? pick(snapshot, 'loadingShell', 'loading_shell', false) === true
+      || pick(snapshot, 'workspaceSurface', 'workspace_surface', null) === 'loading_shell'
+    : false;
+
+  if (loadingShell) {
     return {
       ok: false,
       error_code: LOADING_PENDING,
       retryable: true,
       suggested_next_step: 'reverify',
-      evidence: outcomeSignals,
+      evidence: summarizeWorkspaceSnapshot(snapshot ?? {}),
     };
   }
 
@@ -272,6 +313,10 @@ export async function executeGuardedAction(runtimeOrOptions, execute, verify) {
     await runtime.persistSnapshot(snapshot);
   }
 
+  if (runtime && typeof runtime === 'object') {
+    runtime.snapshot = snapshot;
+  }
+
   const verification = typeof check === 'function'
     ? await check({ executionResult, snapshot })
     : { ok: true };
@@ -307,38 +352,14 @@ export async function selectItemByHint(runtime, requestedLabel, options = {}) {
   const page = runtime?.page ?? runtime;
   const click = runtime?.clickByHintId ?? clickByHintId;
   const rebuildHints = runtime?.rebuildHints;
-  const prevUrl = typeof page?.url === 'function' ? page.url() : null;
-  const prevDomRevision = snapshot?.domRevision ?? 0;
-  let prevActiveId = null;
-  if (typeof page?.evaluate === 'function') {
-    try {
-      prevActiveId = await page.evaluate(() => document.activeElement?.getAttribute('data-grasp-id') ?? null);
-    } catch {}
-  }
 
   return executeGuardedAction(runtime, async () => {
     await click(page, item.hint_id, { rebuildHints });
     return { item };
   }, async ({ snapshot: refreshedSnapshot }) => {
-    if (typeof page?.evaluate !== 'function' || typeof page?.url !== 'function') {
-      return {
-        ok: true,
-        evidence: {
-          hint_id: item.hint_id,
-          label: item.label,
-        },
-      };
-    }
-
-    const newDomRevision = refreshedSnapshot?.domRevision ?? prevDomRevision;
-
     return verifySelectionResult({
-      page,
-      hintId: item.hint_id,
-      prevDomRevision,
-      prevUrl,
-      prevActiveId,
-      newDomRevision,
+      snapshot: refreshedSnapshot,
+      item,
     });
   });
 }
@@ -369,9 +390,10 @@ export async function draftIntoComposer(runtime, text, options = {}) {
   const rebuildHints = runtime?.rebuildHints;
   const prevUrl = typeof page?.url === 'function' ? page.url() : null;
   const prevDomRevision = snapshot?.domRevision ?? 0;
+  const pressEnter = false;
 
   return executeGuardedAction(runtime, async () => {
-    await type(page, composer.hint_id, text, options.pressEnter === true, { rebuildHints });
+    await type(page, composer.hint_id, text, pressEnter, { rebuildHints });
     return { composer, text };
   }, async ({ snapshot: refreshedSnapshot }) => {
     if (typeof page?.evaluate !== 'function' || typeof page?.url !== 'function') {
@@ -388,11 +410,12 @@ export async function draftIntoComposer(runtime, text, options = {}) {
       kind: 'draft_action',
       target: composer.kind ?? 'chat_composer',
       expectedText: text,
-      allowPageChange: options.pressEnter === true,
+      allowPageChange: false,
       prevUrl,
       prevDomRevision,
       newDomRevision,
       outcomeSignals: refreshedSnapshot?.outcome_signals ?? null,
+      snapshot: refreshedSnapshot,
     });
   });
 }
