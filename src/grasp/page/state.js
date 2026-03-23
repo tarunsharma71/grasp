@@ -4,7 +4,9 @@ export function createPageGraspState() {
     domRevision: 0,
     lastSnapshotHash: null,
     pageIdentity: null,
-    currentRole: 'unknown', // unknown | content | form | auth | docs | search | navigation-heavy | checkpoint
+    currentRole: 'unknown', // unknown | content | form | auth | docs | search | workspace | navigation-heavy | checkpoint
+    workspaceSurface: null, // null | list | detail | thread | composer | loading_shell
+    workspaceSignals: [],
     graspConfidence: 'unknown', // unknown | low | medium | high
     reacquired: false,
     riskGateDetected: false,
@@ -70,24 +72,102 @@ function classifySuggestedNextAction({ riskGateDetected, checkpointKind, nodes =
   return 'handoff_required';
 }
 
+function getUrlPath(url) {
+  try {
+    return new URL(url).pathname.toLowerCase();
+  } catch {
+    return url.toLowerCase();
+  }
+}
+
+function detectWorkspaceSignals({ url, title = '', bodyText = '', headings = [] }) {
+  const text = bodyText.toLowerCase();
+  const titleText = String(title).toLowerCase();
+  const headingText = headings.join(' ').toLowerCase();
+  const path = getUrlPath(url);
+  const signals = [];
+
+  if (path.includes('/chat') || path.includes('/thread') || path.includes('/conversation') || path.includes('/inbox')) {
+    signals.push('workspace_path');
+  }
+  if (path.includes('/message') || path.includes('/msg')) {
+    signals.push('workspace_message_path');
+  }
+  if (text.includes('按enter键发送') || text.includes('发消息') || text.includes('发送消息')) {
+    signals.push('workspace_composer_text');
+  }
+  if (text.includes('消息') || text.includes('聊天') || text.includes('对话') || headingText.includes('消息')) {
+    signals.push('workspace_thread_text');
+  }
+  if (text.includes('加载中，请稍候') || text.includes('加载中') || titleText.includes('loading')) {
+    signals.push('workspace_loading_shell');
+  }
+  if (text.includes('详情') || headingText.includes('详情') || path.includes('/detail')) {
+    signals.push('workspace_detail');
+  }
+  if (text.includes('列表') || headingText.includes('列表') || path.includes('/list')) {
+    signals.push('workspace_list');
+  }
+
+  return [...new Set(signals)];
+}
+
+function classifyWorkspaceSurface(signals = [], { bodyText = '', headings = [], url = '' }) {
+  const text = bodyText.toLowerCase();
+  const headingText = headings.join(' ').toLowerCase();
+  const path = getUrlPath(url);
+
+  if (signals.includes('workspace_loading_shell') || text.includes('加载中，请稍候') || text.includes('加载中')) {
+    return 'loading_shell';
+  }
+  if (
+    signals.includes('workspace_path') ||
+    signals.includes('workspace_thread_text') ||
+    path.includes('/chat') ||
+    path.includes('/thread') ||
+    path.includes('/conversation') ||
+    path.includes('/inbox') ||
+    text.includes('对话') ||
+    text.includes('聊天') ||
+    text.includes('消息')
+  ) {
+    return 'thread';
+  }
+  if (
+    signals.includes('workspace_message_path') ||
+    signals.includes('workspace_composer_text') ||
+    text.includes('按enter键发送') ||
+    text.includes('发消息') ||
+    text.includes('发送消息')
+  ) {
+    return 'composer';
+  }
+  if (signals.includes('workspace_detail') || text.includes('详情') || headingText.includes('详情') || path.includes('/detail')) {
+    return 'detail';
+  }
+  if (signals.includes('workspace_list') || text.includes('列表') || headingText.includes('列表') || path.includes('/list')) {
+    return 'list';
+  }
+  return 'list';
+}
+
 function classifyPageRole({ url, title = '', bodyText = '', nodes = 0, forms = 0, navs = 0, headings = [] }) {
   const text = bodyText.toLowerCase();
-  const path = (() => {
-    try {
-      return new URL(url).pathname.toLowerCase();
-    } catch {
-      return url.toLowerCase();
-    }
-  })();
+  const path = getUrlPath(url);
 
   const loginHints = ['sign in', 'log in', 'login', 'password', 'username', 'email address'];
   const searchHints = ['search results', 'no results', 'filter results'];
   const formHints = ['submit', 'required', 'email', 'message'];
   const headingText = headings.join(' ').toLowerCase();
   const checkpointSignals = detectCheckpointSignals({ url, title, bodyText, headings, nodes });
+  const workspaceSignals = detectWorkspaceSignals({ url, title, bodyText, headings });
 
   if (checkpointSignals.length > 0) {
     return 'checkpoint';
+  }
+
+  if (workspaceSignals.length > 0) {
+    return 'workspace';
   }
 
   if (loginHints.some((hint) => text.includes(hint)) || /\/login\b|\/signin\b/.test(path)) {
@@ -153,7 +233,9 @@ export function applySnapshotToPageGraspState(
     checkpointKind: next.checkpointKind,
     nodes,
   });
+  next.workspaceSignals = detectWorkspaceSignals({ url, title, bodyText, headings });
   next.currentRole = classifyPageRole({ url, title, bodyText, nodes, forms, navs, headings });
+  next.workspaceSurface = next.currentRole === 'workspace' ? classifyWorkspaceSurface(next.workspaceSignals, { bodyText, headings, url }) : null;
   next.graspConfidence = classifyConfidence({ bodyText, nodes, urlChanged, domRevisionChanged });
 
   return next;

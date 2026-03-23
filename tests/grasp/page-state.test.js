@@ -114,3 +114,20 @@ test('page grasp state increments dom revision and keeps medium confidence on do
   assert.equal(next.reacquired, true);
   assert.equal(next.graspConfidence, 'medium');
 });
+
+test('workspace pages classify as workspace with a coarse surface hint', () => {
+  const state = createPageGraspState();
+  const next = applySnapshotToPageGraspState(state, {
+    url: 'https://www.zhipin.com/web/geek/chat?id=112222491&source=0',
+    snapshotHash: 'chat-a',
+    title: 'BOSS直聘',
+    bodyText: '消息 按Enter键发送 发简历 换电话 换微信 李女士 人工智能训练师',
+    nodes: 42,
+    forms: 0,
+    navs: 3,
+    headings: [],
+  });
+
+  assert.equal(next.currentRole, 'workspace');
+  assert.equal(next.workspaceSurface, 'thread');
+});
