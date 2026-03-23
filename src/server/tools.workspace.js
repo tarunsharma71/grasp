@@ -69,17 +69,18 @@ function getWorkspaceNextAction(snapshot) {
   const liveItems = getLiveItems(snapshot);
   const activeItem = getActiveItem(snapshot);
   const composer = getComposer(snapshot);
+  const activeItemStable = isActiveItemStable(snapshot, summary);
   const draftPresent = composer?.draft_present === true || summary?.draft_present === true;
-
-  if (draftPresent) {
-    return 'execute_action';
-  }
 
   if (!activeItem && liveItems.length > 0) {
     return 'select_live_item';
   }
 
-  if (composer && isActiveItemStable(snapshot, summary)) {
+  if (composer && activeItemStable && draftPresent) {
+    return 'execute_action';
+  }
+
+  if (composer && activeItemStable) {
     return 'draft_action';
   }
 
@@ -88,6 +89,82 @@ function getWorkspaceNextAction(snapshot) {
   }
 
   return 'workspace_inspect';
+}
+
+function buildWorkspaceSnapshotView(snapshot) {
+  const workspaceSummary = snapshot.summary ?? summarizeWorkspaceSnapshot(snapshot);
+  const workspaceSurface = snapshot.workspace_surface ?? snapshot.workspaceSurface ?? workspaceSummary.workspace_surface;
+
+  return {
+    workspaceSummary,
+    workspaceSurface,
+    workspace: {
+      workspace_surface: workspaceSurface,
+      live_items: getLiveItems(snapshot),
+      active_item: getActiveItem(snapshot),
+      composer: getComposer(snapshot),
+      action_controls: getActionControls(snapshot),
+      blocking_modals: getBlockingModals(snapshot),
+      loading_shell: getLoadingShell(snapshot),
+      summary: workspaceSummary,
+    },
+  };
+}
+
+async function loadWorkspacePageContext(page, state, syncState, collectSnapshot) {
+  await syncState(page, state, { force: true });
+  const snapshot = await collectSnapshot(page, state);
+  const pageInfo = {
+    title: await page.title(),
+    url: page.url(),
+  };
+
+  return {
+    pageInfo,
+    snapshot,
+    ...buildWorkspaceSnapshotView(snapshot),
+  };
+}
+
+function registerWorkspaceActionTool(server, state, deps, toolName, actionKind) {
+  const getPage = deps.getActivePage ?? getActivePage;
+  const syncState = deps.syncPageState ?? syncPageState;
+  const collectSnapshot = deps.collectVisibleWorkspaceSnapshot ?? collectVisibleWorkspaceSnapshot;
+
+  server.registerTool(
+    toolName,
+    {
+      description: `Placeholder workspace action for ${actionKind}.`,
+      inputSchema: {},
+    },
+    async () => {
+      const page = await getPage();
+      const { pageInfo, workspace, workspaceSummary, workspaceSurface } = await loadWorkspacePageContext(page, state, syncState, collectSnapshot);
+      const status = getWorkspaceStatus(state);
+      const continuationAction = status === 'direct' ? actionKind : 'request_handoff';
+
+      return buildGatewayResponse({
+        status,
+        page: toGatewayPage(pageInfo, state),
+        result: {
+          task_kind: 'workspace',
+          action: {
+            kind: actionKind,
+            status: status === 'direct' ? 'unimplemented' : 'blocked',
+          },
+          workspace,
+          summary: `Workspace ${workspaceSurface} • ${workspaceSummary.active_item_label ?? 'no active item'}`,
+        },
+        continuation: getWorkspaceContinuation(state, continuationAction),
+        evidence: {
+          workspace_surface: workspaceSurface,
+          active_item_label: workspaceSummary.active_item_label ?? null,
+          loading_shell: workspaceSummary.loading_shell ?? false,
+          blocking_modal_count: workspaceSummary.blocking_modal_count ?? 0,
+        },
+      });
+    }
+  );
 }
 
 export function registerWorkspaceTools(server, state, deps = {}) {
@@ -103,30 +180,14 @@ export function registerWorkspaceTools(server, state, deps = {}) {
     },
     async () => {
       const page = await getPage();
-      await syncState(page, state, { force: true });
-      const snapshot = await collectSnapshot(page, state);
-      const workspaceSummary = snapshot.summary ?? summarizeWorkspaceSnapshot(snapshot);
-      const workspaceSurface = snapshot.workspace_surface ?? snapshot.workspaceSurface ?? workspaceSummary.workspace_surface;
-      const pageInfo = {
-        title: await page.title(),
-        url: page.url(),
-      };
+      const { pageInfo, snapshot, workspace, workspaceSummary, workspaceSurface } = await loadWorkspacePageContext(page, state, syncState, collectSnapshot);
 
       return buildGatewayResponse({
         status: getWorkspaceStatus(state),
         page: toGatewayPage(pageInfo, state),
         result: {
           task_kind: 'workspace',
-          workspace: {
-            workspace_surface: workspaceSurface,
-            live_items: getLiveItems(snapshot),
-            active_item: getActiveItem(snapshot),
-            composer: getComposer(snapshot),
-            action_controls: getActionControls(snapshot),
-            blocking_modals: getBlockingModals(snapshot),
-            loading_shell: getLoadingShell(snapshot),
-            summary: workspaceSummary,
-          },
+          workspace,
           summary: `Workspace ${workspaceSurface} • ${workspaceSummary.active_item_label ?? 'no active item'}`,
         },
         continuation: getWorkspaceContinuation(state, getWorkspaceNextAction(snapshot)),
@@ -139,4 +200,8 @@ export function registerWorkspaceTools(server, state, deps = {}) {
       });
     }
   );
+
+  registerWorkspaceActionTool(server, state, deps, 'select_live_item', 'select_live_item');
+  registerWorkspaceActionTool(server, state, deps, 'draft_action', 'draft_action');
+  registerWorkspaceActionTool(server, state, deps, 'execute_action', 'execute_action');
 }
