@@ -271,6 +271,56 @@ test('select_live_item writes selection intent and verifies the active item chan
   assert.equal(result.active_item.label, '李女士');
 });
 
+test('select_live_item rejects the same label when the hinted identity changes', async () => {
+  const result = await selectWorkspaceItem(
+    {
+      snapshot: {
+        live_items: [
+          { label: '李女士', normalized_label: '李女士', hint_id: 'L1' },
+        ],
+      },
+      selectItemByHint: async () => ({ ok: true }),
+      refreshSnapshot: async () => ({
+        live_items: [
+          { label: '李女士', normalized_label: '李女士', hint_id: 'L2', selected: true },
+        ],
+        active_item: { label: '李女士', normalized_label: '李女士', hint_id: 'L2', selected: true },
+        detail_alignment: 'aligned',
+        selection_window: 'visible',
+      }),
+    },
+    '李女士'
+  );
+
+  assert.notEqual(result.status, 'selected');
+  assert.equal(result.unresolved.reason, 'virtualized_window_changed');
+});
+
+test('select_live_item returns virtualized_window_changed when the target is no longer confirmed after refresh', async () => {
+  const result = await selectWorkspaceItem(
+    {
+      snapshot: {
+        live_items: [
+          { label: '李女士', normalized_label: '李女士', hint_id: 'L1' },
+        ],
+      },
+      selectItemByHint: async () => ({ ok: true }),
+      refreshSnapshot: async () => ({
+        live_items: [
+          { label: '李女士', normalized_label: '李女士', hint_id: 'L1', selected: false },
+        ],
+        active_item: null,
+        detail_alignment: 'unknown',
+        selection_window: 'not_found',
+      }),
+    },
+    '李女士'
+  );
+
+  assert.notEqual(result.status, 'selected');
+  assert.equal(result.unresolved.reason, 'virtualized_window_changed');
+});
+
 test('select_live_item returns ambiguous_item when multiple visible items match', async () => {
   let clicked = false;
   const result = await selectWorkspaceItem(

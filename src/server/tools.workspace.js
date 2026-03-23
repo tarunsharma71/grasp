@@ -108,6 +108,29 @@ function toPublicBlockingModal(modal) {
   };
 }
 
+function toPublicSelectionItem(item, selected = item?.selected === true) {
+  if (!item) return null;
+  return {
+    label: String(item?.label ?? '').replace(/\s+/g, ' ').trim(),
+    selected: selected === true,
+  };
+}
+
+function toPublicSelectionEvidence(evidence, selected = false) {
+  if (!evidence) return null;
+
+  return {
+    requested_label: String(evidence?.requested_label ?? '').replace(/\s+/g, ' ').trim(),
+    selected_item: toPublicSelectionItem(evidence?.selected_item, selected),
+    active_item: toPublicActiveItem(evidence?.active_item),
+    detail_alignment: evidence?.detail_alignment ?? 'unknown',
+    selection_window: evidence?.selection_window ?? 'not_found',
+    recovery_hint: evidence?.recovery_hint ?? null,
+    match_count: evidence?.match_count ?? 0,
+    summary: evidence?.summary ?? 'unknown',
+  };
+}
+
 function toPublicWorkspaceSummary(summary, snapshot) {
   const blockingModalLabels = Array.isArray(summary?.blocking_modal_labels)
     ? summary.blocking_modal_labels
@@ -350,18 +373,27 @@ export function registerWorkspaceTools(server, state, deps = {}) {
         title: await page.title(),
         url: page.url(),
       };
+      const publicSnapshot = refreshedView.workspace;
+      const publicSelectedItem = toPublicSelectionItem(selection.selected_item, selection.status === 'selected');
+      const publicActiveItem = toPublicActiveItem(selection.active_item);
+      const publicSelectionEvidence = toPublicSelectionEvidence(selection.selection_evidence, selection.status === 'selected');
 
       return buildGatewayResponse({
         status,
         page: toGatewayPage(pageInfoAfter, state),
         result: {
           task_kind: 'workspace',
-          ...selection,
+          status: selection.status,
+          selected_item: publicSelectedItem,
+          active_item: publicActiveItem,
+          detail_alignment: selection.detail_alignment,
+          snapshot: publicSnapshot,
+          selection_evidence: publicSelectionEvidence,
           action: {
             kind: 'select_live_item',
             status: selection.status,
           },
-          workspace: refreshedView.workspace,
+          workspace: publicSnapshot,
           summary: `Workspace ${refreshedView.workspaceSurface} • ${selection.active_item?.label ?? selection.selected_item?.label ?? refreshedView.workspaceSummary.active_item_label ?? 'no active item'}`,
         },
         continuation: getWorkspaceContinuation(state, 'workspace_inspect'),
@@ -370,7 +402,7 @@ export function registerWorkspaceTools(server, state, deps = {}) {
           active_item_label: selection.active_item?.label ?? refreshedView.workspaceSummary.active_item_label ?? null,
           loading_shell: refreshedView.workspaceSummary.loading_shell ?? false,
           blocking_modal_count: refreshedView.workspaceSummary.blocking_modal_count ?? 0,
-          selection_evidence: selection.selection_evidence,
+          selection_evidence: publicSelectionEvidence,
         },
       });
     }

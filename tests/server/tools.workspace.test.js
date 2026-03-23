@@ -242,6 +242,13 @@ test('workspace action tools select live items directly while draft and execute 
   assert.deepEqual(directResults.map((result) => result.meta.result.action.status), ['selected', 'delegated', 'delegated']);
   assert.equal(directResults[0].meta.result.selected_item.label, '李女士');
   assert.equal(directResults[0].meta.result.active_item.label, '李女士');
+  assert.equal(directResults[0].meta.result.selected_item.hint_id, undefined);
+  assert.equal(directResults[0].meta.result.selected_item.normalized_label, undefined);
+  assert.equal(directResults[0].meta.result.active_item.hint_id, undefined);
+  assert.equal(directResults[0].meta.result.selection_evidence.selected_item.hint_id, undefined);
+  assert.equal(directResults[0].meta.result.snapshot.live_items[0].hint_id, undefined);
+  assert.equal(directResults[0].meta.result.snapshot.live_items[0].normalized_label, undefined);
+  assert.equal(directResults[0].meta.result.snapshot.composer?.draft_text, undefined);
   assert.deepEqual(directInvocations, ['select_live_item', 'draft_action', 'execute_action']);
 
   const blockedCalls = [];
@@ -282,6 +289,11 @@ test('workspace action tools select live items directly while draft and execute 
       assert.notEqual(result.meta.result.detail_alignment, undefined);
       assert.ok(result.meta.result.snapshot);
       assert.ok(result.meta.result.selection_evidence);
+      assert.equal(result.meta.result.selected_item, null);
+      assert.equal(result.meta.result.active_item.hint_id, undefined);
+      assert.equal(result.meta.result.selection_evidence.selected_item?.hint_id, undefined);
+      assert.equal(result.meta.result.snapshot.live_items[0].hint_id, undefined);
+      assert.equal(result.meta.result.snapshot.live_items[0].normalized_label, undefined);
     }
   }
 
@@ -321,5 +333,10 @@ test('workspace action tools select live items directly while draft and execute 
   assert.notEqual(gatedResult.meta.result.detail_alignment, undefined);
   assert.ok(gatedResult.meta.result.snapshot);
   assert.ok(gatedResult.meta.result.selection_evidence);
+  assert.equal(gatedResult.meta.result.selected_item, null);
+  assert.equal(gatedResult.meta.result.active_item.hint_id, undefined);
+  assert.equal(gatedResult.meta.result.selection_evidence.selected_item?.hint_id, undefined);
+  assert.equal(gatedResult.meta.result.snapshot.live_items[0].hint_id, undefined);
+  assert.equal(gatedResult.meta.result.snapshot.live_items[0].normalized_label, undefined);
   assert.deepEqual(gatedMutations, []);
 });

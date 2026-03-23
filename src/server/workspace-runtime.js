@@ -622,12 +622,21 @@ export async function selectWorkspaceItem(runtime, requestedLabel) {
   const refreshedDetails = getSelectionSnapshotDetails(refreshedSnapshot);
   const refreshedLiveItems = getLiveItems(refreshedSnapshot);
   const normalizedLabel = normalizeLabel(requestedLabel);
+  const targetHintId = compactText(item?.hint_id);
   const activeMatch = normalizeLabel(refreshedDetails.activeItem?.label) === normalizedLabel;
+  const activeHintMatch = targetHintId && compactText(refreshedDetails.activeItem?.hint_id) === targetHintId;
   const selectedMatch = refreshedLiveItems.some((liveItem) => (
     liveItem?.selected === true
     && getSelectionMatchLabel(liveItem) === normalizedLabel
   ));
+  const selectedHintMatch = targetHintId && refreshedLiveItems.some((liveItem) => (
+    liveItem?.selected === true
+    && compactText(liveItem?.hint_id) === targetHintId
+  ));
   const detailAlignment = refreshedDetails.detailAlignment;
+  const selectionConfirmed = targetHintId
+    ? activeHintMatch || selectedHintMatch
+    : activeMatch || selectedMatch;
 
   if (detailAlignment === 'mismatch') {
     return {
@@ -650,7 +659,7 @@ export async function selectWorkspaceItem(runtime, requestedLabel) {
     };
   }
 
-  if (activeMatch || selectedMatch) {
+  if (selectionConfirmed) {
     return {
       status: 'selected',
       selected_item: item,
