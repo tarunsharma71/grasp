@@ -619,7 +619,10 @@ export async function selectWorkspaceItem(runtime, requestedLabel) {
     };
   }
 
-  const initialSnapshot = normalizeWorkspaceSnapshot(runtime?.snapshot ?? runtime ?? {});
+  const rawInitialSnapshot = runtime?.snapshot ?? runtime ?? {};
+  const initialSnapshot = normalizeWorkspaceSnapshot(rawInitialSnapshot);
+  const initialPageUrl = typeof runtime?.page?.url === 'function' ? runtime.page.url() : null;
+  const initialDomRevision = state?.pageState?.domRevision ?? null;
   const resolution = resolveWorkspaceSelection(initialSnapshot, requestedLabel);
 
   if (!resolution.item) {
@@ -645,6 +648,29 @@ export async function selectWorkspaceItem(runtime, requestedLabel) {
   }
 
   const item = resolution.item;
+  const navigationLike = pick(rawInitialSnapshot, 'workspaceSurface', 'workspace_surface', null) === 'list'
+    || state?.pageState?.workspaceSurface === 'list'
+    || state?.pageState?.currentRole === 'navigation-heavy';
+  if (navigationLike && item.selected === true) {
+    const details = getSelectionSnapshotDetails(initialSnapshot);
+    return {
+      status: 'selected',
+      selected_item: item,
+      active_item: details.activeItem ?? { label: item.label },
+      detail_alignment: details.detailAlignment,
+      snapshot: initialSnapshot,
+      selection_evidence: buildSelectionEvidence({
+        requestedLabel,
+        item,
+        summary: details.summary,
+        activeItem: details.activeItem ?? { label: item.label, selected: true },
+        detailAlignment: details.detailAlignment,
+        selectionWindow: details.selectionWindow,
+        recoveryHint: details.summary.recovery_hint ?? null,
+        matches: resolution.matches ?? [item],
+      }),
+    };
+  }
   const selectItem = typeof runtime?.selectItemByHint === 'function'
     ? runtime.selectItemByHint
     : typeof runtime?.clickByHintId === 'function' && compactText(item?.hint_id)
@@ -700,11 +726,12 @@ export async function selectWorkspaceItem(runtime, requestedLabel) {
     };
   }
 
-  const refreshedSnapshot = normalizeWorkspaceSnapshot(
-    typeof runtime?.refreshSnapshot === 'function'
-      ? await runtime.refreshSnapshot()
-      : runtime?.snapshot ?? runtime ?? {},
-  );
+  const rawRefreshedSnapshot = typeof runtime?.refreshSnapshot === 'function'
+    ? await runtime.refreshSnapshot()
+    : runtime?.snapshot ?? runtime ?? {};
+  const refreshedSnapshot = normalizeWorkspaceSnapshot(rawRefreshedSnapshot);
+  const refreshedPageUrl = typeof runtime?.page?.url === 'function' ? runtime.page.url() : null;
+  const refreshedDomRevision = state?.pageState?.domRevision ?? null;
 
   if (typeof runtime?.persistSnapshot === 'function') {
     await runtime.persistSnapshot(refreshedSnapshot);
@@ -729,9 +756,30 @@ export async function selectWorkspaceItem(runtime, requestedLabel) {
     && compactText(liveItem?.hint_id) === targetHintId
   ));
   const detailAlignment = refreshedDetails.detailAlignment;
+  const navigationLikeAfter = pick(rawInitialSnapshot, 'workspaceSurface', 'workspace_surface', null) === 'list'
+    || pick(rawRefreshedSnapshot, 'workspaceSurface', 'workspace_surface', null) === 'list'
+    || state?.pageState?.workspaceSurface === 'list'
+    || state?.pageState?.currentRole === 'navigation-heavy';
+  const navigationTransitionDetected = (
+    initialPageUrl
+    && refreshedPageUrl
+    && initialPageUrl !== refreshedPageUrl
+  ) || (
+    initialDomRevision !== null
+    && refreshedDomRevision !== null
+    && initialDomRevision !== refreshedDomRevision
+  );
+  const labelStillVisible = refreshedLiveItems.some((liveItem) => getSelectionMatchLabel(liveItem) === normalizedLabel);
+  const navigationConfirmed = navigationLikeAfter
+    && detailAlignment !== 'mismatch'
+    && (
+      selectedMatch
+      || activeMatch
+      || (navigationTransitionDetected && labelStillVisible && refreshedDetails.selectionWindow !== 'not_found')
+    );
   const selectionConfirmed = targetHintId
-    ? activeHintMatch || selectedHintMatch
-    : activeMatch || selectedMatch;
+    ? activeHintMatch || selectedHintMatch || navigationConfirmed
+    : activeMatch || selectedMatch || navigationConfirmed;
 
   if (detailAlignment === 'mismatch') {
     return {

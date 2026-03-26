@@ -90,7 +90,7 @@ function hasWorkspacePathEvidence(url) {
   return segments.some((segment) => workspaceSegments.includes(segment));
 }
 
-function detectWorkspaceSignals({ url, title = '', bodyText = '', headings = [] }) {
+function detectWorkspaceSignals({ url, title = '', bodyText = '', headings = [], navs = 0 }) {
   const text = bodyText.toLowerCase();
   const signals = [];
 
@@ -111,6 +111,9 @@ function detectWorkspaceSignals({ url, title = '', bodyText = '', headings = [] 
   }
   if (text.includes('消息') || text.includes('聊天') || text.includes('对话')) {
     signals.push('workspace_thread_text');
+  }
+  if (navs >= 6) {
+    signals.push('workspace_navigation');
   }
 
   return [...new Set(signals)];
@@ -203,7 +206,10 @@ function classifyPageRole({ url, title = '', bodyText = '', nodes = 0, forms = 0
   if (searchHints.some((hint) => text.includes(hint))) {
     return 'search';
   }
-  if (forms >= 2 || formHints.some((hint) => text.includes(hint)) || nodes >= 12) {
+  const hasFormText = formHints.some((hint) => text.includes(hint));
+  const hasStrongFormSignals = forms >= 1 && hasFormText;
+  const hasDenseStandaloneForm = forms >= 3 && navs < 6;
+  if (hasStrongFormSignals || hasDenseStandaloneForm) {
     return 'form';
   }
   if (navs >= 6) {
@@ -252,9 +258,13 @@ export function applySnapshotToPageGraspState(
     checkpointKind: next.checkpointKind,
     nodes,
   });
-  next.workspaceSignals = detectWorkspaceSignals({ url, title, bodyText, headings });
+  next.workspaceSignals = detectWorkspaceSignals({ url, title, bodyText, headings, navs });
   next.currentRole = classifyPageRole({ url, title, bodyText, nodes, forms, navs, headings });
-  next.workspaceSurface = next.currentRole === 'workspace' ? classifyWorkspaceSurface(scoreWorkspaceSurface({ url, bodyText })) : null;
+  next.workspaceSurface = next.currentRole === 'workspace'
+    ? classifyWorkspaceSurface(scoreWorkspaceSurface({ url, bodyText }))
+    : next.currentRole === 'navigation-heavy'
+      ? 'list'
+      : null;
   next.graspConfidence = classifyConfidence({ bodyText, nodes, urlChanged, domRevisionChanged });
 
   return next;

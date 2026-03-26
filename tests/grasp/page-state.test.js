@@ -53,6 +53,22 @@ test('page grasp state keeps simple content pages as content', () => {
   assert.equal(state.currentRole, 'content');
 });
 
+test('navigation-heavy admin pages do not collapse into form pages', () => {
+  const state = applySnapshotToPageGraspState(createPageGraspState(), {
+    url: 'https://app.example.com/cgi-bin/home',
+    snapshotHash: 'admin-a',
+    title: 'Control Center',
+    bodyText: '首页 内容管理 草稿箱 素材库 发表记录 数据概览 用户设置 搜索',
+    nodes: 24,
+    forms: 2,
+    navs: 10,
+    headings: ['内容管理'],
+  });
+
+  assert.equal(state.currentRole, 'navigation-heavy');
+  assert.equal(state.workspaceSurface, 'list');
+});
+
 test('page grasp state classifies challenge-style pages as checkpoint', () => {
   const state = applySnapshotToPageGraspState(createPageGraspState(), {
     url: 'https://chatgpt.com/',

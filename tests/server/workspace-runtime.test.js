@@ -298,6 +298,91 @@ test('select_live_item rejects the same label when the hinted identity changes',
   assert.equal(result.unresolved.reason, 'virtualized_window_changed');
 });
 
+test('select_live_item accepts navigation list transitions when the url changes after selection', async () => {
+  let currentUrl = 'https://example.test/cgi-bin/home';
+  const state = {
+    pageState: {
+      currentRole: 'navigation-heavy',
+      workspaceSurface: 'list',
+      domRevision: 0,
+      graspConfidence: 'high',
+      riskGateDetected: false,
+    },
+    handoff: { state: 'idle' },
+  };
+
+  const result = await selectWorkspaceItem(
+    {
+      state,
+      page: {
+        url: () => currentUrl,
+      },
+      snapshot: {
+        workspace_surface: 'list',
+        live_items: [
+          { label: '发表记录', normalized_label: '发表记录', hint_id: 'N1', selected: false },
+        ],
+      },
+      selectItemByHint: async () => {
+        currentUrl = 'https://example.test/cgi-bin/appmsg';
+        state.pageState.domRevision = 1;
+        return { ok: true };
+      },
+      refreshSnapshot: async () => ({
+        workspace_surface: 'list',
+        live_items: [
+          { label: '发表记录', normalized_label: '发表记录', hint_id: 'N2', selected: false },
+        ],
+        active_item: null,
+        detail_alignment: 'unknown',
+        selection_window: 'visible',
+      }),
+    },
+    '发表记录'
+  );
+
+  assert.equal(result.status, 'selected');
+  assert.equal(result.selected_item.label, '发表记录');
+  assert.equal(result.selection_evidence.selection_window, 'visible');
+});
+
+test('select_live_item treats an already-selected navigation item as a successful no-op', async () => {
+  let clicked = false;
+  const state = {
+    pageState: {
+      currentRole: 'navigation-heavy',
+      workspaceSurface: 'list',
+      domRevision: 0,
+      graspConfidence: 'high',
+      riskGateDetected: false,
+    },
+    handoff: { state: 'idle' },
+  };
+
+  const result = await selectWorkspaceItem(
+    {
+      state,
+      snapshot: {
+        workspace_surface: 'list',
+        live_items: [
+          { label: '首页', normalized_label: '首页', hint_id: 'L2', selected: true },
+          { label: '新的功能', normalized_label: '新的功能', hint_id: 'L3', selected: false },
+        ],
+      },
+      selectItemByHint: async () => {
+        clicked = true;
+        return { ok: true };
+      },
+    },
+    '首页'
+  );
+
+  assert.equal(clicked, false);
+  assert.equal(result.status, 'selected');
+  assert.equal(result.selected_item.label, '首页');
+  assert.equal(result.active_item.label, '首页');
+});
+
 test('select_live_item returns virtualized_window_changed when the target is no longer confirmed after refresh', async () => {
   const result = await selectWorkspaceItem(
     {

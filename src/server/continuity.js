@@ -1,3 +1,5 @@
+import { deriveWorkspaceHintItems } from './workspace-tasks.js';
+
 export function buildCheckpointHandoffSuggestion(pageState = {}, pageUrl = '') {
   const checkpointKind = pageState.checkpointKind ?? 'unknown';
   const role = pageState.currentRole ?? 'unknown';
@@ -183,10 +185,16 @@ export async function assessGatewayContinuation(page, state) {
   }
 
   const continuation = await assessResumeContinuation(page, state, anchors);
-  const suggestedDirectAction = pageState.currentRole === 'form'
-    ? 'form_inspect'
-    : pageState.currentRole === 'workspace'
-      ? 'workspace_inspect'
+  const workspaceHintItems = deriveWorkspaceHintItems(state?.hintMap ?? []);
+  const workspaceLike = pageState.currentRole === 'workspace'
+    || pageState.currentRole === 'navigation-heavy'
+    || pageState.workspaceSurface === 'list'
+    || (pageState.workspaceSignals ?? []).includes('workspace_navigation')
+    || workspaceHintItems.length > 0;
+  const suggestedDirectAction = workspaceLike
+    ? 'workspace_inspect'
+    : pageState.currentRole === 'form'
+      ? 'form_inspect'
       : continuation.suggested_next_action;
 
   if (handoffState === 'resumed_verified' || handoffState === 'resumed_unverified') {

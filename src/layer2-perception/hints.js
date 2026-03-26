@@ -41,6 +41,21 @@ export async function buildHintMap(page, registry = new Map(), counters = { B: 0
       return 0;
     }
 
+    function isSelected(el) {
+      const ariaCurrent = (el.getAttribute('aria-current') || '').toLowerCase();
+      const classAttr = String(el.getAttribute('class') || '');
+      const hasStateClass = classAttr
+        .split(/\s+/)
+        .some((token) => /(^|[-_])(selected|current)($|[-_])/i.test(token));
+      return el.getAttribute('aria-selected') === 'true'
+        || el.getAttribute('data-selected') === 'true'
+        || ['page', 'step', 'location', 'date', 'time', 'true'].includes(ariaCurrent)
+        || hasStateClass
+        || el.classList.contains('selected')
+        || el.classList.contains('is-selected')
+        || el.classList.contains('workspace-item--selected');
+    }
+
     // 1. 遍历 document.body 下所有元素
     const walker = document.createTreeWalker(
       document.body,
@@ -200,8 +215,10 @@ export async function buildHintMap(page, registry = new Map(), counters = { B: 0
         name: el.getAttribute('name') ?? '',
         idAttr: el.getAttribute('id') ?? '',
         ariaLabel: el.getAttribute('aria-label') ?? '',
+        ariaCurrent: el.getAttribute('aria-current') ?? '',
         placeholder: el.getAttribute('placeholder') ?? '',
         contenteditable: isContentEditable,
+        selected: isSelected(el),
         role,
         tag,
       };

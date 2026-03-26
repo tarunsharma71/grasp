@@ -6,6 +6,7 @@ import {
   collectVisibleWorkspaceSnapshot,
   buildWorkspaceVerification,
   summarizeWorkspaceSnapshot,
+  deriveWorkspaceHintItems,
 } from '../../src/server/workspace-tasks.js';
 
 function createMockElement({
@@ -30,12 +31,17 @@ function createMockElement({
       .split(',')
       .map((part) => part.trim())
       .some((part) => {
+        if (part === 'li') return tagName === 'li';
+        if (part === 'a') return tagName === 'a';
         if (part === 'textarea') return tagName === 'textarea';
         if (part === 'input:not([type="hidden"])') return tagName === 'input' && attrs.type !== 'hidden';
         if (part === '[contenteditable="true"]') return attrs.contenteditable === 'true';
         if (part === '[role="textbox"]') return attrs.role === 'textbox';
         if (part === 'button') return tagName === 'button';
         if (part === '[role="button"]') return attrs.role === 'button';
+        if (part === '[role="link"]') return attrs.role === 'link';
+        if (part === '[role="menuitem"]') return attrs.role === 'menuitem';
+        if (part === '[role="tab"]') return attrs.role === 'tab';
         if (part === 'input[type="submit"]') return tagName === 'input' && attrs.type === 'submit';
         if (part === 'input[type="button"]') return tagName === 'input' && attrs.type === 'button';
         if (part === '[role="option"]') return attrs.role === 'option';
@@ -49,6 +55,11 @@ function createMockElement({
         if (part === 'dialog[open]') return tagName === 'dialog' && attrs.open === true;
         if (part === '[data-detail-panel]') return attrs['data-detail-panel'] !== undefined;
         if (part === '[role="complementary"]') return attrs.role === 'complementary';
+        if (part === '[role="navigation"]') return attrs.role === 'navigation';
+        if (part === '[role="menu"]') return attrs.role === 'menu';
+        if (part === '[role="tablist"]') return attrs.role === 'tablist';
+        if (part === 'nav') return tagName === 'nav';
+        if (part === 'header') return tagName === 'header';
         if (part === '.detail-panel') return classNames.includes('detail-panel');
         if (part === 'aside') return tagName === 'aside';
         return false;
@@ -180,6 +191,20 @@ test('summarizeWorkspaceSnapshot does not guess an active item from multiple can
   assert.equal(summary.active_item_label, null);
 });
 
+test('deriveWorkspaceHintItems preserves selected/current navigation hints', () => {
+  const items = deriveWorkspaceHintItems([
+    { id: 'L1', type: 'a', label: '公众号', x: 128, y: 48, meta: { selected: false } },
+    { id: 'L2', type: 'a', label: '首页', x: 108, y: 111, meta: { selected: true, ariaCurrent: 'page' } },
+    { id: 'L3', type: 'a', label: '新的功能', x: 108, y: 598, meta: { selected: false } },
+  ]);
+
+  assert.deepEqual(items.map((item) => ({ label: item.label, selected: item.selected })), [
+    { label: '公众号', selected: false },
+    { label: '首页', selected: true },
+    { label: '新的功能', selected: false },
+  ]);
+});
+
 test('collectVisibleWorkspaceSnapshot ignores a generic textbox', async () => {
   const page = createDomPage({
     bodyText: '搜索',
@@ -289,6 +314,91 @@ test('collectVisibleWorkspaceSnapshot captures a stable thread surface shape', a
   assert.equal(snapshot.action_controls.length, 1);
   assert.equal(snapshot.composer.kind, 'chat_composer');
   assert.equal(snapshot.detail_alignment, 'aligned');
+});
+
+test('collectVisibleWorkspaceSnapshot prefers leaf nav items over grouped containers', async () => {
+  const navLeaf = createMockElement({
+    tagName: 'a',
+    attrs: {
+      class: 'weui-desktop-menu__link weui-desktop-menu__link_current',
+      closestMatches: ['nav, aside, [role="navigation"], [role="menu"], [role="tablist"], header'],
+    },
+    textContent: '首页',
+  });
+  const groupedContainer = createMockElement({
+    tagName: 'li',
+    attrs: {
+      'data-list-item': 'true',
+    },
+    textContent: '内容管理 草稿箱 素材库 发表记录',
+    queryMap: {
+      'a, [role="link"], [role="menuitem"], [role="tab"], button, [role="button"]': navLeaf,
+    },
+  });
+
+  const page = createDomPage({
+    bodyText: '首页 内容管理 草稿箱 素材库 发表记录',
+    queryAllMap: {
+      'li, [role="option"], [role="row"], [role="treeitem"], [data-list-item], [data-thread-item], [data-conversation-item]': [
+        groupedContainer,
+      ],
+      'a, [role="link"], [role="menuitem"], [role="tab"], button, [role="button"]': [
+        navLeaf,
+      ],
+      'textarea, input:not([type="hidden"]), [contenteditable="true"], [role="textbox"]': [],
+      'button, [role="button"], input[type="submit"], input[type="button"]': [],
+      '[role="dialog"], [aria-modal="true"], dialog[open]': [],
+      '[data-detail-panel], [role="complementary"], .detail-panel, aside': [],
+    },
+    queryMap: {
+      '[aria-busy="true"], .loading, .skeleton, .spinner': null,
+    },
+  });
+
+  const snapshot = await collectVisibleWorkspaceSnapshot(page);
+
+  assert.equal(snapshot.workspace_surface, 'list');
+  assert.deepEqual(snapshot.live_items.map((item) => item.label), ['首页']);
+  assert.equal(snapshot.live_items[0]?.selected, true);
+  assert.equal(snapshot.active_item?.label, '首页');
+});
+
+test('collectVisibleWorkspaceSnapshot merges left-rail hint items when the DOM list misses them', async () => {
+  const page = createDomPage({
+    bodyText: '首页 创作周报 全部发表记录',
+    queryAllMap: {
+      'li, [role="option"], [role="row"], [role="treeitem"], [data-list-item], [data-thread-item], [data-conversation-item]': [
+        createMockElement({
+          tagName: 'li',
+          attrs: {
+            'data-list-item': 'true',
+          },
+          textContent: '你的创作周报已生成',
+        }),
+      ],
+      'a, [role="link"], [role="menuitem"], [role="tab"], button, [role="button"]': [],
+      'textarea, input:not([type="hidden"]), [contenteditable="true"], [role="textbox"]': [],
+      'button, [role="button"], input[type="submit"], input[type="button"]': [],
+      '[role="dialog"], [aria-modal="true"], dialog[open]': [],
+      '[data-detail-panel], [role="complementary"], .detail-panel, aside': [],
+    },
+    queryMap: {
+      '[aria-busy="true"], .loading, .skeleton, .spinner': null,
+    },
+  });
+
+  const snapshot = await collectVisibleWorkspaceSnapshot(page, {
+    hintMap: [
+      { id: 'L1', type: 'a', label: '公众号', x: 128, y: 48, meta: { selected: false } },
+      { id: 'L2', type: 'a', label: '首页', x: 108, y: 111, meta: { selected: true, ariaCurrent: 'page' } },
+      { id: 'L3', type: 'a', label: '新的功能', x: 108, y: 598, meta: { selected: false } },
+    ],
+  });
+
+  assert.equal(snapshot.workspace_surface, 'list');
+  assert.deepEqual(snapshot.live_items.slice(0, 2).map((item) => item.label), ['公众号', '首页']);
+  assert.equal(snapshot.live_items.find((item) => item.label === '首页')?.selected, true);
+  assert.ok(snapshot.live_items.some((item) => item.label === '你的创作周报已生成'));
 });
 
 test('collectVisibleWorkspaceSnapshot keeps success signal helpers self-contained in browser context', async () => {

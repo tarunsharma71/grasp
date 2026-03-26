@@ -471,6 +471,78 @@ test('continue suggests workspace_inspect on direct workspace pages', async () =
   assert.equal(result.meta.continuation.suggested_next_action, 'workspace_inspect');
 });
 
+test('continue prefers workspace_inspect when the page affordance is a workspace list', async () => {
+  const calls = [];
+  const server = { registerTool(name, spec, handler) { calls.push({ name, handler }); } };
+  const page = createFakePage({
+    url: () => 'https://example.com/cgi-bin/home',
+    title: () => 'Control Center',
+  });
+  const state = {
+    pageState: {
+      currentRole: 'form',
+      workspaceSurface: 'list',
+      graspConfidence: 'high',
+      riskGateDetected: false,
+    },
+    handoff: { state: 'idle' },
+  };
+
+  registerGatewayTools(server, state, {
+    getActivePage: async () => page,
+    syncPageState: async (_page, currentState) => {
+      currentState.pageState = state.pageState;
+      return currentState;
+    },
+  });
+
+  const continueTool = calls.find((tool) => tool.name === 'continue');
+  const result = await continueTool.handler();
+
+  assert.equal(result.meta.status, 'direct');
+  assert.equal(result.meta.continuation.can_continue, true);
+  assert.equal(result.meta.continuation.suggested_next_action, 'workspace_inspect');
+});
+
+test('continue prefers workspace_inspect when the hint map exposes a left-rail workspace list', async () => {
+  const calls = [];
+  const server = { registerTool(name, spec, handler) { calls.push({ name, handler }); } };
+  const page = createFakePage({
+    url: () => 'https://example.com/cgi-bin/home',
+    title: () => 'Control Center',
+  });
+  const state = {
+    hintMap: [
+      { id: 'L1', type: 'a', label: '公众号', x: 128, y: 48 },
+      { id: 'L2', type: 'a', label: '首页', x: 108, y: 111 },
+      { id: 'L3', type: 'a', label: '新的功能', x: 108, y: 598 },
+    ],
+    pageState: {
+      currentRole: 'content',
+      workspaceSurface: null,
+      graspConfidence: 'medium',
+      riskGateDetected: false,
+    },
+    handoff: { state: 'idle' },
+  };
+
+  registerGatewayTools(server, state, {
+    getActivePage: async () => page,
+    syncPageState: async (_page, currentState) => {
+      currentState.pageState = state.pageState;
+      currentState.hintMap = state.hintMap;
+      return currentState;
+    },
+  });
+
+  const continueTool = calls.find((tool) => tool.name === 'continue');
+  const result = await continueTool.handler();
+
+  assert.equal(result.meta.status, 'direct');
+  assert.equal(result.meta.continuation.can_continue, true);
+  assert.equal(result.meta.continuation.suggested_next_action, 'workspace_inspect');
+});
+
 test('continue returns resumed workspace guidance with workspace_inspect as the next step', async () => {
   const calls = [];
   const server = { registerTool(name, spec, handler) { calls.push({ name, handler }); } };

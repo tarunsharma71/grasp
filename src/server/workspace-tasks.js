@@ -6,6 +6,56 @@ function normalizeLabel(value) {
   return compactText(value).toLowerCase();
 }
 
+export function deriveWorkspaceHintItems(hintMap = []) {
+  const hints = Array.isArray(hintMap) ? hintMap : [];
+  const candidates = hints
+    .map((hint) => {
+      const label = compactText(hint?.label);
+      const type = compactText(hint?.type ?? hint?.meta?.tag).toLowerCase();
+      const ariaCurrent = compactText(hint?.meta?.ariaCurrent).toLowerCase();
+      return {
+        label,
+        normalized_label: normalizeLabel(label),
+        hint_id: compactText(hint?.id) || null,
+        type,
+        x: Number(hint?.x),
+        y: Number(hint?.y),
+        selected: hint?.meta?.selected === true
+          || ['page', 'step', 'location', 'date', 'time', 'true'].includes(ariaCurrent),
+      };
+    })
+    .filter((hint) => hint.label
+      && hint.label.length <= 24
+      && !/^\d+$/.test(hint.label)
+      && (hint.type === 'a' || hint.type === 'button')
+      && Number.isFinite(hint.x)
+      && Number.isFinite(hint.y)
+      && hint.x <= 240)
+    .sort((left, right) => left.y - right.y || left.x - right.x);
+
+  if (candidates.length < 2) {
+    return [];
+  }
+
+  const xValues = candidates.map((hint) => hint.x);
+  const yValues = candidates.map((hint) => hint.y);
+  const xSpread = Math.max(...xValues) - Math.min(...xValues);
+  const ySpread = Math.max(...yValues) - Math.min(...yValues);
+
+  if (xSpread > 120 || ySpread < 40) {
+    return [];
+  }
+
+  return candidates
+    .filter((hint, index, items) => items.findIndex((candidate) => candidate.normalized_label === hint.normalized_label) === index)
+    .map(({ label, normalized_label, hint_id, selected }) => ({
+      label,
+      normalized_label,
+      hint_id,
+      selected: selected === true,
+    }));
+}
+
 function pick(snapshot, camelKey, snakeKey, fallback = null) {
   if (snapshot?.[camelKey] !== undefined) return snapshot[camelKey];
   if (snapshot?.[snakeKey] !== undefined) return snapshot[snakeKey];
@@ -402,17 +452,49 @@ export async function collectVisibleWorkspaceSnapshot(page, state) {
       || bodyText.includes('正在加载');
 
     function isSelected(el) {
+      const ariaCurrent = el.getAttribute('aria-current');
+      const classAttr = String(el.getAttribute('class') || '');
+      const hasStateClass = classAttr
+        .split(/\s+/)
+        .some((token) => /(^|[-_])(selected|current)($|[-_])/i.test(token));
       return el.getAttribute('aria-selected') === 'true'
         || el.getAttribute('data-selected') === 'true'
+        || ariaCurrent === 'true'
+        || ariaCurrent === 'page'
+        || ariaCurrent === 'step'
+        || ariaCurrent === 'location'
+        || hasStateClass
         || el.classList.contains('selected')
         || el.classList.contains('is-selected')
         || el.classList.contains('workspace-item--selected');
     }
 
+    const structuredItemSelector = 'li, [role="option"], [role="row"], [role="treeitem"], [data-list-item], [data-thread-item], [data-conversation-item]';
+    const navLeafSelector = 'a, [role="link"], [role="menuitem"], [role="tab"], button, [role="button"]';
+
+    function hasNestedNavLeaf(el) {
+      return Boolean(el.querySelector(navLeafSelector));
+    }
+
+    function isNavLeafCandidate(el) {
+      if (!isVisible(el)) return false;
+      if (!el.matches(navLeafSelector)) return false;
+      const label = getText(el);
+      if (!label || label.length > 60) return false;
+
+      return Boolean(
+        el.closest('nav, aside, [role="navigation"], [role="menu"], [role="tablist"], header')
+        || el.getAttribute('aria-current')
+        || el.getAttribute('aria-selected') === 'true'
+      );
+    }
+
     function isWorkspaceItemCandidate(el) {
       if (!isVisible(el)) return false;
-      if (el.closest('button, a, [role="button"], input, textarea, select')) return false;
-      return el.matches('li, [role="option"], [role="row"], [role="treeitem"], [data-list-item], [data-thread-item], [data-conversation-item]');
+      if (isNavLeafCandidate(el)) return true;
+      if (el.closest('button, a, [role="button"], [role="link"], [role="menuitem"], [role="tab"], input, textarea, select')) return false;
+      if (hasNestedNavLeaf(el)) return false;
+      return el.matches(structuredItemSelector);
     }
 
     function readLiveItem(el) {
@@ -508,7 +590,7 @@ export async function collectVisibleWorkspaceSnapshot(page, state) {
         .filter(Boolean);
     }
 
-    const live_items = [...document.querySelectorAll('li, [role="option"], [role="row"], [role="treeitem"], [data-list-item], [data-thread-item], [data-conversation-item]')]
+    const live_items = [...document.querySelectorAll(structuredItemSelector), ...document.querySelectorAll(navLeafSelector)]
       .filter(isWorkspaceItemCandidate)
       .map(readLiveItem)
       .filter(Boolean)
@@ -560,9 +642,19 @@ export async function collectVisibleWorkspaceSnapshot(page, state) {
     };
   });
 
+  const hintLiveItems = deriveWorkspaceHintItems(state?.hintMap ?? []);
+  const mergedLiveItems = [...hintLiveItems, ...getLiveItems(rawSnapshot)]
+    .filter((item, index, items) => {
+      const key = `${compactText(item?.hint_id)}|${normalizeLabel(item?.normalized_label ?? item?.label)}`;
+      return items.findIndex((candidate) => `${compactText(candidate?.hint_id)}|${normalizeLabel(candidate?.normalized_label ?? candidate?.label)}` === key) === index;
+    });
   const snapshot = {
     ...rawSnapshot,
-    workspace_surface: classifyWorkspaceSurface(rawSnapshot),
+    live_items: mergedLiveItems,
+    workspace_surface: classifyWorkspaceSurface({
+      ...rawSnapshot,
+      live_items: mergedLiveItems,
+    }),
   };
 
   return {
