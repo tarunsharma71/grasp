@@ -2,7 +2,7 @@
 
 Public docs for the Grasp Agent Web Runtime.
 
-Current package release: `v0.5.2`
+Current package release: `v0.55.0`
 
 ---
 
@@ -46,4 +46,5 @@ For the canonical product-layer mapping, see [Agent Web Runtime](./product/brows
 
 ## Releases
 
+- [v0.55.0 release notes](./release-notes-v0.55.0.md)
 - [v0.5.2 release notes](./release-notes-v0.5.2.md)

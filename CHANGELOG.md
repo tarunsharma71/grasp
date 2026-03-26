@@ -4,6 +4,23 @@ All notable changes to Grasp are documented here.
 
 ---
 
+## v0.55.0 — 2026-03-26
+
+The release that closes the last workspace consistency gaps for navigation-first authenticated surfaces.
+
+### Changed
+- Workspace navigation selection now treats the current navigation item as selected even when the page only exposes that state through class tokens such as `*_current`
+- `select_live_item` now accepts already-selected navigation items as a successful no-op instead of surfacing `virtualized_window_changed`
+- Workspace snapshots now reconcile merged hint-derived navigation items back into `active_item`, `active_item_label`, `selection_window`, and related verification fields
+- `workspace_inspect` and related workspace tool summaries now prefer the selected live item label on list surfaces instead of falling back to `no active item`
+- Package metadata, lockfile metadata, README badges, docs index, and release links now point to `v0.55.0`
+
+### Validated
+- Real workspace smoke on WeChat Official Accounts now reports `workspace_inspect -> Workspace list • 首页` and treats repeated selection of `首页` as `selected`
+- Full automated test suite passes: `209 / 209`
+
+---
+
 ## v0.5.2 — 2026-03-23
 
 The release where Grasp becomes an AI browser gateway with safe real form tasks and dynamic authenticated task flows.

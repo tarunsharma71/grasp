@@ -50,7 +50,22 @@ function getLoadingShell(snapshot) {
 }
 
 function getActiveItem(snapshot) {
-  return pick(snapshot, 'activeItem', 'active_item', null);
+  const activeItem = pick(snapshot, 'activeItem', 'active_item', null);
+  if (activeItem) {
+    return activeItem;
+  }
+
+  const summaryLabel = String(snapshot?.summary?.active_item_label ?? '').replace(/\s+/g, ' ').trim();
+  if (summaryLabel) {
+    return { label: summaryLabel };
+  }
+
+  const selectedLiveItem = getLiveItems(snapshot).find((item) => item?.selected === true);
+  if (selectedLiveItem?.label) {
+    return { label: String(selectedLiveItem.label).replace(/\s+/g, ' ').trim() };
+  }
+
+  return null;
 }
 
 function getSendLikeActionControls(snapshot) {
@@ -286,7 +301,7 @@ function getWorkspaceNextAction(snapshot) {
 }
 
 function buildWorkspaceSnapshotView(snapshot) {
-  const workspaceSummary = snapshot.summary ?? summarizeWorkspaceSnapshot(snapshot);
+  const workspaceSummary = summarizeWorkspaceSnapshot(snapshot);
   const workspaceSurface = snapshot.workspace_surface ?? snapshot.workspaceSurface ?? workspaceSummary.workspace_surface;
 
   return {

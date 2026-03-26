@@ -317,12 +317,22 @@ export function summarizeWorkspaceSnapshot(snapshot = {}) {
   const rawSelectionWindow = snapshot.selection_window !== undefined ? snapshot.selection_window : snapshot.selectionWindow;
   const rawRecoveryHint = snapshot.recovery_hint !== undefined ? snapshot.recovery_hint : snapshot.recoveryHint;
   const rawOutcomeSignals = snapshot.outcome_signals !== undefined ? snapshot.outcome_signals : snapshot.outcomeSignals;
-  const activeItem = rawActiveItem !== undefined ? rawActiveItem : getActiveItem(snapshot, liveItems, detailPanel);
+  const derivedActiveItem = getActiveItem(snapshot, liveItems, detailPanel);
+  const activeItem = rawActiveItem ?? derivedActiveItem;
+  const shouldPreferDerivedSelection = rawActiveItem == null && derivedActiveItem != null;
   const workspaceSurface = pick(snapshot, 'workspaceSurface', 'workspace_surface', null) ?? classifyWorkspaceSurface(snapshot);
-  const detailAlignment = rawDetailAlignment !== undefined ? rawDetailAlignment : getDetailAlignment(activeItem, detailPanel);
-  const selectionWindow = rawSelectionWindow !== undefined ? rawSelectionWindow : getSelectionWindow(activeItem, detailPanel, liveItems);
-  const recoveryHint = rawRecoveryHint !== undefined ? rawRecoveryHint : getRecoveryHint(selectionWindow, liveItems, detailPanel);
-  const outcomeSignals = rawOutcomeSignals !== undefined ? rawOutcomeSignals : getOutcomeSignals(snapshot, composer, activeItem, detailAlignment, selectionWindow);
+  const detailAlignment = shouldPreferDerivedSelection
+    ? getDetailAlignment(activeItem, detailPanel)
+    : rawDetailAlignment !== undefined ? rawDetailAlignment : getDetailAlignment(activeItem, detailPanel);
+  const selectionWindow = shouldPreferDerivedSelection
+    ? getSelectionWindow(activeItem, detailPanel, liveItems)
+    : rawSelectionWindow !== undefined ? rawSelectionWindow : getSelectionWindow(activeItem, detailPanel, liveItems);
+  const recoveryHint = shouldPreferDerivedSelection
+    ? getRecoveryHint(selectionWindow, liveItems, detailPanel)
+    : rawRecoveryHint !== undefined ? rawRecoveryHint : getRecoveryHint(selectionWindow, liveItems, detailPanel);
+  const outcomeSignals = shouldPreferDerivedSelection
+    ? getOutcomeSignals(snapshot, composer, activeItem, detailAlignment, selectionWindow)
+    : rawOutcomeSignals !== undefined ? rawOutcomeSignals : getOutcomeSignals(snapshot, composer, activeItem, detailAlignment, selectionWindow);
   const summary = getSummaryString({
     workspaceSurface,
     activeItem,
@@ -648,9 +658,34 @@ export async function collectVisibleWorkspaceSnapshot(page, state) {
       const key = `${compactText(item?.hint_id)}|${normalizeLabel(item?.normalized_label ?? item?.label)}`;
       return items.findIndex((candidate) => `${compactText(candidate?.hint_id)}|${normalizeLabel(candidate?.normalized_label ?? candidate?.label)}` === key) === index;
     });
+  const detailPanel = getDetailPanel(rawSnapshot);
+  const rawActiveItem = rawSnapshot?.active_item !== undefined ? rawSnapshot.active_item : rawSnapshot?.activeItem;
+  const mergedActiveItem = rawActiveItem ?? getActiveItem({}, mergedLiveItems, detailPanel);
+  const shouldReconcileSelection = rawActiveItem == null && mergedActiveItem != null;
+  const detailAlignment = shouldReconcileSelection
+    ? getDetailAlignment(mergedActiveItem, detailPanel)
+    : pick(rawSnapshot, 'detailAlignment', 'detail_alignment', undefined);
+  const selectionWindow = shouldReconcileSelection
+    ? getSelectionWindow(mergedActiveItem, detailPanel, mergedLiveItems)
+    : pick(rawSnapshot, 'selectionWindow', 'selection_window', undefined);
+  const recoveryHint = shouldReconcileSelection
+    ? getRecoveryHint(selectionWindow, mergedLiveItems, detailPanel)
+    : pick(rawSnapshot, 'recoveryHint', 'recovery_hint', undefined);
+  const outcomeSignals = shouldReconcileSelection
+    ? getOutcomeSignals(rawSnapshot, getComposer(rawSnapshot), mergedActiveItem, detailAlignment, selectionWindow)
+    : pick(rawSnapshot, 'outcomeSignals', 'outcome_signals', undefined);
   const snapshot = {
     ...rawSnapshot,
     live_items: mergedLiveItems,
+    ...(shouldReconcileSelection
+      ? {
+          active_item: mergedActiveItem,
+          detail_alignment: detailAlignment,
+          selection_window: selectionWindow,
+          recovery_hint: recoveryHint,
+          outcome_signals: outcomeSignals,
+        }
+      : {}),
     workspace_surface: classifyWorkspaceSurface({
       ...rawSnapshot,
       live_items: mergedLiveItems,

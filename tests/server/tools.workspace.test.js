@@ -167,6 +167,9 @@ test('workspace_inspect summary prefers the selected live item label on list sur
   const tool = calls.find((entry) => entry.name === 'workspace_inspect');
   const result = await tool.handler({});
 
+  assert.deepEqual(result.meta.result.workspace.active_item, { label: '首页' });
+  assert.equal(result.meta.result.workspace.summary.active_item_label, '首页');
+  assert.equal(result.meta.evidence.active_item_label, '首页');
   assert.equal(result.meta.result.summary, 'Workspace list • 首页');
 });
 

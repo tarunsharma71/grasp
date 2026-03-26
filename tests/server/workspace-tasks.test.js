@@ -397,7 +397,10 @@ test('collectVisibleWorkspaceSnapshot merges left-rail hint items when the DOM l
 
   assert.equal(snapshot.workspace_surface, 'list');
   assert.deepEqual(snapshot.live_items.slice(0, 2).map((item) => item.label), ['公众号', '首页']);
+  assert.equal(snapshot.active_item?.label, '首页');
   assert.equal(snapshot.live_items.find((item) => item.label === '首页')?.selected, true);
+  assert.equal(snapshot.summary.active_item_label, '首页');
+  assert.equal(snapshot.summary.selection_window, 'visible');
   assert.ok(snapshot.live_items.some((item) => item.label === '你的创作周报已生成'));
 });
 
