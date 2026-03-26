@@ -45,6 +45,8 @@ export function createServerState() {
     webmcp: null,
     hintMap: [],
     lastUrl: null,
+    targetSession: null,
+    activeTaskId: null,
     hintRegistry: new Map(),
     hintCounters: { B: 0, I: 0, L: 0, S: 0 },
     safeMode: isSafeModeEnabled(),
@@ -54,6 +56,12 @@ export function createServerState() {
     verificationContext: null,
     taskFrames: new Map(),
   };
+}
+
+export function getActiveTaskFrame(state) {
+  const taskId = state?.activeTaskId ?? state?.taskId ?? null;
+  if (!taskId) return null;
+  return state?.taskFrames?.get(taskId) ?? null;
 }
 
 export async function syncPageState(page, state, { force = false } = {}) {
@@ -75,6 +83,10 @@ export async function syncPageState(page, state, { force = false } = {}) {
   const domRevisionChanged = prevPageState.domRevision !== nextPageState.domRevision;
   state.pageState = nextPageState;
   state.lastUrl = nextPageState.lastUrl;
+  const activeTaskFrame = getActiveTaskFrame(state);
+  if (activeTaskFrame) {
+    activeTaskFrame.lastUrl = nextPageState.lastUrl;
+  }
 
   const needsRefresh = force || state.webmcp === null || urlChanged || domRevisionChanged;
   if (!needsRefresh) return state;

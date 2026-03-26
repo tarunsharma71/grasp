@@ -59,5 +59,9 @@ export function clearHandoff(current) {
     expected_selector: null,
     continuation_goal: null,
     expected_hint_label: null,
+    taskId: null,
+    siteKey: null,
+    sessionKey: null,
+    lastUrl: null,
   });
 }

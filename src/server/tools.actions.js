@@ -10,6 +10,9 @@ import { TYPE_FAILED } from './error-codes.js';
 import { runVerifiedAction } from '../grasp/verify/pipeline.js';
 import { readHandoffState } from '../grasp/handoff/persist.js';
 import { extractMainContent } from './content.js';
+import { readBossFastPath } from './fast-path-router.js';
+import { buildPageProjection } from './page-projection.js';
+import { selectEngine } from './engine-selection.js';
 
 function buildStructuredError(message, normalizedHintId, verdict) {
   const meta = {
@@ -28,7 +31,11 @@ function createRebuildHints(page, state) {
   };
 }
 
-export function registerActionTools(server, state) {
+export function registerActionTools(server, state, deps = {}) {
+  const getPage = deps.getActivePage ?? getActivePage;
+  const syncState = deps.syncPageState ?? syncPageState;
+  const extractContent = deps.extractMainContent ?? extractMainContent;
+
   server.registerTool(
     'navigate',
     {
@@ -37,7 +44,7 @@ export function registerActionTools(server, state) {
     },
     async ({ url }) => {
       try {
-        const page = await navigateTo(url);
+        const page = await navigateTo(url, { state });
         await syncPageState(page, state, { force: true });
         await audit('navigate', url);
         return textResponse([
@@ -60,8 +67,8 @@ export function registerActionTools(server, state) {
     },
     async () => {
       try {
-        const page = await getActivePage();
-        await syncPageState(page, state);
+        const page = await getPage({ state });
+        await syncState(page, state);
         state.handoff = await readHandoffState();
         const handoff = state.handoff ?? { state: 'idle' };
         const pageState = state.pageState ?? {};
@@ -98,18 +105,34 @@ export function registerActionTools(server, state) {
       inputSchema: {},
     },
     async () => {
-      const page = await getActivePage();
-      await syncPageState(page, state);
-      const main = await extractMainContent(page);
+      const page = await getPage({ state });
+      const selection = selectEngine({ tool: 'get_page_summary', url: page.url() });
+      let fastPath = null;
+
+      if (selection.engine === 'runtime') {
+        await syncState(page, state, { force: true });
+        fastPath = await readBossFastPath(page);
+      } else {
+        await syncState(page, state);
+      }
+
+      const main = fastPath ?? await extractContent(page);
+      const result = buildPageProjection({
+        ...selection,
+        surface: fastPath?.surface ?? 'content',
+        title: main.title,
+        url: fastPath?.url ?? page.url(),
+        mainText: fastPath?.mainText ?? main.text,
+      });
       const { summary } = describeMode(state);
       return textResponse([
-        `Title: ${main.title}`,
-        `URL: ${page.url()}`,
+        `Title: ${result.title}`,
+        `URL: ${result.url}`,
         `Mode: ${summary}`,
         '',
         'Visible content (truncated):',
-        main.text.slice(0, 2000),
-      ]);
+        result.main_text.slice(0, 2000),
+      ], { result });
     }
   );
 
@@ -122,7 +145,7 @@ export function registerActionTools(server, state) {
       },
     },
     async ({ filter } = {}) => {
-      const page = await getActivePage();
+      const page = await getPage({ state });
       await syncPageState(page, state, { force: true });
       const query = (filter ?? '').trim().toLowerCase();
       const hints = query
@@ -151,7 +174,7 @@ export function registerActionTools(server, state) {
     },
     async ({ hint_id }) => {
       const normalizedHintId = String(hint_id).trim();
-      const page = await getActivePage();
+      const page = await getPage({ state });
       await syncPageState(page, state);
       const prevDomRevision = state.pageState?.domRevision ?? 0;
       const prevUrl = page.url();
@@ -205,7 +228,7 @@ export function registerActionTools(server, state) {
     },
     async ({ hint_id, text, press_enter = false }) => {
       const normalizedHintId = String(hint_id).trim();
-      const page = await getActivePage();
+      const page = await getPage({ state });
       await syncPageState(page, state);
       const prevDomRevision = state.pageState?.domRevision ?? 0;
       const prevUrl = page.url();
@@ -257,7 +280,7 @@ export function registerActionTools(server, state) {
     },
     async ({ hint_id }) => {
       const normalizedHintId = String(hint_id).trim();
-      const page = await getActivePage();
+      const page = await getPage({ state });
       await syncPageState(page, state);
       const prevUrl = page.url();
       const rebuildHints = createRebuildHints(page, state);
@@ -297,7 +320,7 @@ export function registerActionTools(server, state) {
       },
     },
     async ({ key }) => {
-      const page = await getActivePage();
+      const page = await getPage({ state });
       await syncPageState(page, state);
       await pressKey(page, key);
       await syncPageState(page, state, { force: true });
@@ -321,7 +344,7 @@ export function registerActionTools(server, state) {
       },
     },
     async ({ selector, condition = 'appears', timeout_ms = 30000 }) => {
-      const page = await getActivePage();
+      const page = await getPage({ state });
       const result = await watchElement(page, selector, condition, timeout_ms);
       await audit('watch_element', `${condition} ${selector}`);
       return textResponse([
@@ -343,7 +366,7 @@ export function registerActionTools(server, state) {
       },
     },
     async ({ direction, amount = 600 }) => {
-      const page = await getActivePage();
+      const page = await getPage({ state });
       await syncPageState(page, state);
       await scroll(page, direction, amount);
       await syncPageState(page, state, { force: true });

@@ -1,7 +1,7 @@
 import { chromium } from 'playwright-core';
 import { startChromeHint } from '../cli/detect-chrome.js';
 import { writeRuntimeStatus } from '../server/runtime-status.js';
-import { isSafeModeEnabled } from '../server/state.js';
+import { getActiveTaskFrame, isSafeModeEnabled } from '../server/state.js';
 
 const CDP_URL = process.env.CHROME_CDP_URL || 'http://localhost:9222';
 const DEFAULT_RETRY_DELAYS = [0, 250, 1000];
@@ -37,6 +37,71 @@ function runPersist(persistFn, snapshot) {
   } catch {
     // swallow
   }
+}
+
+function clearTargetSession(state) {
+  if (state) {
+    const activeTaskFrame = getActiveTaskFrame(state);
+    if (activeTaskFrame) {
+      activeTaskFrame.pinnedTarget = null;
+      state.targetSession = null;
+      return;
+    }
+    if (state.targetSession) {
+      state.targetSession = null;
+    }
+  }
+}
+
+function getPinnedTargetSession(state) {
+  const activeTaskFrame = getActiveTaskFrame(state);
+  if (activeTaskFrame) {
+    return activeTaskFrame.pinnedTarget ?? null;
+  }
+  return state?.targetSession ?? null;
+}
+
+function isPinnedTargetAvailable(page, browser) {
+  if (!page) return false;
+  if (page.isClosed?.() === true) return false;
+
+  const contexts = browser?.contexts?.() ?? [];
+  for (const context of contexts) {
+    const pages = context?.pages?.() ?? [];
+    if (pages.includes(page)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function matchesPinnedTarget(page, targetSession) {
+  const currentUrl = page?.url?.() ?? '';
+  if (!currentUrl || !targetSession?.url) return false;
+  if (currentUrl !== targetSession.url) return false;
+  if (currentUrl.startsWith('chrome://')) return false;
+  if (currentUrl.startsWith('chrome-extension://')) return false;
+  if (currentUrl.startsWith('about:')) return false;
+  return true;
+}
+
+export async function pinTargetPage(page, state) {
+  const targetSession = {
+    page,
+    url: page.url(),
+    title: await page.title(),
+  };
+  if (state) {
+    const activeTaskFrame = getActiveTaskFrame(state);
+    if (activeTaskFrame) {
+      activeTaskFrame.pinnedTarget = targetSession;
+      state.targetSession = null;
+    } else {
+      state.targetSession = targetSession;
+    }
+  }
+  return targetSession;
 }
 
 export function createConnectionSupervisor({
@@ -164,9 +229,19 @@ async function getBrowser() {
   return supervisor.getBrowser();
 }
 
-async function getActivePage() {
-  const browser = await getBrowser();
-  const context = browser.contexts()[0];
+async function getActivePage({ state = null, browser = null } = {}) {
+  const resolvedBrowser = browser ?? await getBrowser();
+  const pinnedTarget = getPinnedTargetSession(state);
+
+  if (pinnedTarget?.page) {
+    const pinnedPage = pinnedTarget.page;
+    if (isPinnedTargetAvailable(pinnedPage, resolvedBrowser) && matchesPinnedTarget(pinnedPage, pinnedTarget)) {
+      return pinnedPage;
+    }
+    clearTargetSession(state);
+  }
+
+  const context = resolvedBrowser.contexts()[0];
   if (!context) throw new Error('No browser context available.');
   const pages = context.pages();
 
@@ -196,8 +271,8 @@ async function getActivePage() {
   return userPages[userPages.length - 1];
 }
 
-async function navigateTo(url) {
-  const page = await getActivePage();
+async function navigateTo(url, { state = null, browser = null } = {}) {
+  const page = await getActivePage({ state, browser });
 
   try {
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
@@ -259,6 +334,10 @@ async function newTab(url) {
   return page;
 }
 
+async function trustedContextOpen(url) {
+  return newTab(url);
+}
+
 async function closeTab(index) {
   const browser = await getBrowser();
   const context = browser.contexts()[0];
@@ -270,4 +349,4 @@ async function closeTab(index) {
   await pages[index].close();
 }
 
-export { getBrowser, getActivePage, navigateTo, getTabs, switchTab, newTab, closeTab };
+export { getBrowser, getActivePage, navigateTo, getTabs, switchTab, newTab, trustedContextOpen, closeTab };

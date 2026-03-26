@@ -1,16 +1,30 @@
 import { z } from 'zod';
 
-import { getActivePage, navigateTo } from '../layer1-bridge/chrome.js';
+import { getActivePage, navigateTo, pinTargetPage, trustedContextOpen } from '../layer1-bridge/chrome.js';
 import { textResponse } from './responses.js';
 import { syncPageState } from './state.js';
 import { audit } from './audit.js';
 import { requestHandoff } from '../grasp/handoff/events.js';
-import { readHandoffState, writeHandoffState } from '../grasp/handoff/persist.js';
+import { attachHandoffTaskMetadata, readHandoffState, writeHandoffState } from '../grasp/handoff/persist.js';
 import { buildCheckpointHandoffSuggestion, buildSessionTrustPreflight } from './continuity.js';
+import { createEntryOrchestrator } from './entry-orchestrator.js';
+
+function getEntryStrategies(preflight) {
+  if (preflight.recommended_entry_strategy === 'resume_existing_session') {
+    return ['trusted_context_open', 'direct_goto'];
+  }
+
+  if (preflight.recommended_entry_strategy === 'preheat_before_direct_entry') {
+    return ['trusted_context_open', 'direct_goto'];
+  }
+
+  return ['direct_goto'];
+}
 
 export async function enterWithStrategy({ url, state, deps = {} }) {
   const getActivePageFn = deps.getActivePage ?? getActivePage;
-  const navigateToFn = deps.navigateTo ?? navigateTo;
+  const directGoto = deps.directGoto ?? deps.navigateTo ?? navigateTo;
+  const trustedContextOpenFn = deps.trustedContextOpen ?? trustedContextOpen;
   const syncState = deps.syncPageState ?? syncPageState;
   const readHandoff = deps.readHandoffState ?? readHandoffState;
   const auditFn = deps.audit ?? audit;
@@ -20,7 +34,7 @@ export async function enterWithStrategy({ url, state, deps = {} }) {
   let pageState = state.pageState ?? {};
 
   try {
-    const activePage = await getActivePageFn();
+    const activePage = await getActivePageFn({ state });
     await syncState(activePage, state);
     pageState = state.pageState ?? {};
   } catch {
@@ -33,20 +47,39 @@ export async function enterWithStrategy({ url, state, deps = {} }) {
     return { url, title: null, preflight, pageState, handoff };
   }
 
-  const page = await navigateToFn(url);
-  await syncState(page, state, { force: true });
-  await auditFn(auditName, `${preflight.recommended_entry_strategy} :: ${url}`);
+  const orchestrator = createEntryOrchestrator({
+    directGoto,
+    trustedContextOpen: trustedContextOpenFn,
+  });
+  const entry = await orchestrator.run({
+    targetUrl: url,
+    strategies: getEntryStrategies(preflight),
+    state,
+  });
+
+  const page = entry.page;
+  if (page) {
+    await syncState(page, state, { force: true });
+    await pinTargetPage(page, state);
+  }
+  await auditFn(auditName, `${entry.entry_method ?? preflight.recommended_entry_strategy} :: ${url}`);
 
   return {
     url,
-    title: await page.title(),
+    title: page ? await page.title() : null,
     preflight,
     pageState: state.pageState ?? pageState,
     handoff,
+    entry_method: entry.entry_method,
+    final_url: entry.final_url,
+    verified: entry.verified,
+    evidence: entry.evidence,
   };
 }
 
-export function registerStrategyTools(server, state) {
+export function registerStrategyTools(server, state, deps = {}) {
+  const getPage = deps.getActivePage ?? getActivePage;
+
   server.registerTool(
     'preheat_session',
     {
@@ -111,8 +144,17 @@ export function registerStrategyTools(server, state) {
         `Session trust: ${preflight.session_trust}`,
         `Navigated to: ${url}`,
         `Page title: ${outcome.title}`,
+        `Entry method: ${outcome.entry_method ?? 'unknown'}`,
+        `Verified: ${outcome.verified ? 'yes' : 'no'}`,
         extra,
-      ], { preflight, pageState: state.pageState });
+      ], {
+        preflight,
+        pageState: state.pageState,
+        entry_method: outcome.entry_method ?? null,
+        final_url: outcome.final_url ?? null,
+        verified: outcome.verified ?? false,
+        evidence: outcome.evidence ?? null,
+      });
     }
   );
 
@@ -127,7 +169,7 @@ export function registerStrategyTools(server, state) {
     async ({ url }) => {
       let pageState = state.pageState ?? {};
       try {
-        const page = await getActivePage();
+        const page = await getPage({ state });
         await syncPageState(page, state);
         pageState = state.pageState ?? {};
       } catch {
@@ -153,7 +195,7 @@ export function registerStrategyTools(server, state) {
       inputSchema: {},
     },
     async () => {
-      const page = await getActivePage();
+      const page = await getPage({ state });
       await syncPageState(page, state, { force: true });
       const suggestion = buildCheckpointHandoffSuggestion(state.pageState, page.url());
       return textResponse([
@@ -175,16 +217,16 @@ export function registerStrategyTools(server, state) {
       },
     },
     async ({ note } = {}) => {
-      const page = await getActivePage();
+      const page = await getPage({ state });
       await syncPageState(page, state, { force: true });
       const suggestion = buildCheckpointHandoffSuggestion(state.pageState, page.url());
-      state.handoff = requestHandoff(await readHandoffState(), suggestion.reason, note ?? suggestion.note, {
+      state.handoff = attachHandoffTaskMetadata(requestHandoff(await readHandoffState(), suggestion.reason, note ?? suggestion.note, {
         expected_url_contains: suggestion.expected_url_contains,
         expected_page_role: suggestion.expected_page_role,
         expected_selector: suggestion.expected_selector,
         continuation_goal: suggestion.continuation_goal,
         expected_hint_label: suggestion.expected_hint_label,
-      });
+      }), state);
       await writeHandoffState(state.handoff);
       await audit('handoff_request_from_checkpoint', `${suggestion.reason}${note ? ` :: ${note}` : ''}`);
       return textResponse([

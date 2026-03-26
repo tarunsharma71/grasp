@@ -6,6 +6,9 @@ import { assessGatewayContinuation } from './continuity.js';
 import { getActivePage } from '../layer1-bridge/chrome.js';
 import { syncPageState } from './state.js';
 import { enterWithStrategy } from './tools.strategy.js';
+import { readBossFastPath } from './fast-path-router.js';
+import { buildPageProjection } from './page-projection.js';
+import { selectEngine } from './engine-selection.js';
 
 function toGatewayPage({ title, url, pageState }, state, { preferCurrentUrl = false } = {}) {
   const pageUrl = preferCurrentUrl
@@ -122,7 +125,7 @@ export function registerGatewayTools(server, state, deps = {}) {
       inputSchema: {},
     },
     async () => {
-      const page = await getPage();
+      const page = await getPage({ state });
       await syncState(page, state, { force: true });
 
       return buildGatewayResponse({
@@ -146,25 +149,56 @@ export function registerGatewayTools(server, state, deps = {}) {
       },
     },
     async ({ include_markdown = false } = {}) => {
-      const page = await getPage();
-      await syncState(page, state, { force: true });
-      const result = await observeContent({
-        page,
-        deps: {
-          waitStable: deps.waitUntilStable,
-          extractContent: deps.extractMainContent,
-        },
-        include_markdown,
-      });
+      const page = await getPage({ state });
+      const selection = selectEngine({ tool: 'extract', url: page.url() });
+      let projectedFastPath = null;
+
+      if (selection.engine === 'runtime') {
+        await syncState(page, state, { force: true });
+        const fastPath = await readBossFastPath(page);
+        if (fastPath) {
+          projectedFastPath = buildPageProjection({
+            ...selection,
+            surface: fastPath.surface,
+            title: fastPath.title,
+            url: fastPath.url,
+            mainText: fastPath.mainText,
+            includeMarkdown: include_markdown,
+          });
+        }
+      }
+
+      const result = projectedFastPath ?? await (async () => {
+        if (selection.engine !== 'runtime') {
+          await syncState(page, state, { force: true });
+        }
+        const observed = await observeContent({
+          page,
+          deps: {
+            waitStable: deps.waitUntilStable,
+            extractContent: deps.extractMainContent,
+          },
+          include_markdown,
+        });
+        return buildPageProjection({
+          ...selection,
+          surface: 'content',
+          title: await page.title(),
+          url: page.url(),
+          mainText: observed.main_text,
+          markdown: observed.markdown,
+          includeMarkdown: include_markdown,
+        });
+      })();
 
       return buildGatewayResponse({
         status: getGatewayStatus(state),
         page: toGatewayPage({
-          title: await page.title(),
-          url: page.url(),
+          title: projectedFastPath?.title ?? await page.title(),
+          url: projectedFastPath?.url ?? page.url(),
           pageState: state.pageState,
         }, state),
-        result,
+        result: projectedFastPath ?? result,
         continuation: getGatewayContinuation(state, 'inspect'),
       });
     }
@@ -177,7 +211,7 @@ export function registerGatewayTools(server, state, deps = {}) {
       inputSchema: {},
     },
     async () => {
-      const page = await getPage();
+      const page = await getPage({ state });
       await syncState(page, state, { force: true });
       const outcome = await assessGatewayContinuation(page, state);
 
