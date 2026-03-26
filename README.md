@@ -5,14 +5,12 @@
 [![Version](https://img.shields.io/badge/version-v0.5.2-0B1738?style=flat-square)](./CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-23C993?style=flat-square)](./LICENSE)
 [![Validated](https://img.shields.io/badge/validated-Claude%20Code%20%7C%20Codex%20%7C%20Cursor-5B6CFF?style=flat-square)](./README.md#quickstart)
-[![npm](https://img.shields.io/badge/npm-grasp-CB3837?style=flat-square)](https://www.npmjs.com/package/grasp)
+> **Grasp is an Agent Web Runtime: one interface for real browser work and public-web extraction, delivered through CLI bootstrap, MCP tools, and a skill surface.**
 
-> **Grasp is an AI browser gateway: it enters, reads, acts, hands off, and resumes real web tasks with evidence.**
-
-Grasp runs locally, keeps a dedicated `chrome-grasp` profile, and gives agents a browser session they can reuse instead of restarting from scratch every time.
+Grasp runs locally, keeps a dedicated `chrome-grasp` profile, and gives agents an Agent Web Runtime they can reuse across login state, handoffs, and recovery instead of starting from scratch every time.
 
 Current package release: `v0.5.2`  
-Public docs for the gateway surface: [docs/README.md](./docs/README.md)
+Public docs for the runtime surface: [docs/README.md](./docs/README.md)
 
 ---
 
@@ -22,28 +20,53 @@ Most browser automation breaks at exactly the wrong moment: after login, after a
 
 Grasp is built for those real workflows:
 
+- real browsing instead of search-substitute shortcuts
 - persistent browser sessions instead of throwaway tabs
+- isolated browser runtime state instead of a shared, brittle profile
+- basic multi-task runtime state instead of a single fragile active-page assumption
 - verified actions instead of blind `click` success
-- compact page understanding instead of raw HTML dumps
-- recoverable handoff and resume instead of starting over
+- recovery and resume instead of starting over
+- MCP tools and a skill surface instead of a single CLI story
+- one interface with a Runtime Engine and a thin Data Engine read seam for public-web discovery and extraction
 
 What it does not claim:
 
 - universal CAPTCHA bypass
 - full autonomy on every gated site
 - magic recovery without visible evidence
+- that BOSS is the whole product
+- that Grasp is a scraping-only system
 
 ---
 
 ## Quickstart
 
-### 1. Start Grasp
+### 1. Bootstrap Grasp locally
 
 ```bash
 npx grasp
 ```
 
 This detects Chrome, launches the dedicated `chrome-grasp` profile, and helps you connect your AI client.
+
+If you already have the CLI installed, `grasp connect` does the same local bootstrap step.
+
+Bootstrap also establishes the remote-debugging/CDP connection Grasp needs. In the normal local path, users do not need to prepare that separately.
+
+### How the layers fit
+
+`npx grasp` / `grasp connect` bootstrap the local runtime, MCP tools are the public runtime interface, and the skill is the recommended task-facing layer on top of the same runtime.
+
+The product identity is the Agent Web Runtime itself. For the canonical delivery-surface mapping, see [Agent Web Runtime](./docs/product/browser-runtime-for-agents.md).
+
+### One interface, two backends
+
+Grasp keeps a single agent-facing interface. In this slice, `Data Engine` is a thin read seam and selection direction for public-web reads, not a fully delivered separate backend:
+
+- `Runtime Engine` for authenticated browser work, live sessions, handoff, and recovery
+- `Data Engine` for public-web discovery and extraction when live browser state is not the right path
+
+The product is not a scraper wrapped in browser language. The Runtime Engine stays first-class, and the Data Engine points at the intended split without claiming a separate delivered backend yet.
 
 ### 2. Connect your client
 
@@ -75,7 +98,7 @@ command = "npx"
 args = ["-y", "grasp"]
 ```
 
-### 3. Use the gateway flow
+### 3. Use the runtime surface
 
 Start with the high-level tools:
 
@@ -89,7 +112,11 @@ Manual smoke playbook: [docs/reference/smoke-paths.md](./docs/reference/smoke-pa
 
 ---
 
-## Gateway Workflows
+## Runtime Workflows
+
+### Real browsing first
+
+Start from the real page and the real session whenever possible. Grasp should read and act on the current browser state before falling back to heavier observation or search-like shortcuts.
 
 ### Direct read
 
@@ -121,7 +148,7 @@ When a human step is required, keep the workflow continuous instead of pretendin
 4. `resume_after_handoff` reacquires the page with continuation evidence
 5. `continue` decides what should happen next
 
-Product story: [docs/product/ai-browser-gateway.md](./docs/product/ai-browser-gateway.md)
+Runtime story: [docs/product/browser-runtime-for-agents.md](./docs/product/browser-runtime-for-agents.md)
 
 ---
 
@@ -151,11 +178,17 @@ really moved to the next state.
 
 Workspace task reference: [docs/reference/mcp-tools.md](./docs/reference/mcp-tools.md)
 
+These workspace flows are examples of the Agent Web Runtime in use. BOSS is one example, and the same runtime direction also covers surfaces such as WeChat Official Accounts and Xiaohongshu without collapsing the whole product into any one workflow.
+
+### Basic parallel task state
+
+Grasp does not promise a large scheduler today, but it is moving toward handling more than one task/session context without collapsing everything into one active browser assumption.
+
 ---
 
 ## Advanced Runtime Primitives
 
-The gateway tools are the public default. The lower-level runtime is still available when you need tighter control.
+The runtime surface is the public default. The lower-level runtime is still available when you need tighter control.
 
 Common advanced primitives:
 
@@ -173,7 +206,7 @@ Full reference: [docs/reference/mcp-tools.md](./docs/reference/mcp-tools.md)
 
 | Command | Description |
 |:---|:---|
-| `grasp` / `grasp connect` | Set up the local browser gateway |
+| `grasp` / `grasp connect` | Set up the local browser runtime |
 | `grasp status` | Show connection state, current tab, and recent activity |
 | `grasp logs` | View audit log (`~/.grasp/audit.log`) |
 | `grasp logs --lines 20` | Show the last 20 log lines |
@@ -182,7 +215,7 @@ Full reference: [docs/reference/mcp-tools.md](./docs/reference/mcp-tools.md)
 ## Docs
 
 - [docs/README.md](./docs/README.md)
-- [docs/product/ai-browser-gateway.md](./docs/product/ai-browser-gateway.md)
+- [Browser Runtime Story](./docs/product/browser-runtime-for-agents.md)
 - [docs/reference/mcp-tools.md](./docs/reference/mcp-tools.md)
 - [docs/reference/smoke-paths.md](./docs/reference/smoke-paths.md)
 

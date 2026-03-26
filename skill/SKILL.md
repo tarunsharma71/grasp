@@ -1,13 +1,13 @@
 ---
 name: grasp
-description: Use when user wants to automate browser interactions — navigate websites, click elements, fill forms, scroll pages, take screenshots, or observe web content. Requires grasp MCP server running and Chrome with remote debugging enabled.
+description: Use when an agent needs the Grasp Agent Web Runtime for real browser work or public-web extraction through one interface with the Runtime Engine and a thin Data Engine read seam. Requires the Grasp MCP server to be reachable; `npx grasp` or `grasp connect` can bootstrap the local runtime when needed.
 ---
 
-# Grasp — Browser Automation
+# Grasp — Agent Web Runtime
 
-Grasp gives the AI a persistent Chrome profile (`chrome-grasp`). Log in once; sessions survive every run.
+Grasp gives the AI an Agent Web Runtime backed by a persistent Chrome profile (`chrome-grasp`). Log in once; sessions survive every run and can be recovered after handoff.
 
-## Prerequisites
+## Bootstrap
 
 Before any action, verify Chrome is reachable:
 
@@ -21,17 +21,47 @@ npx grasp
 # or: grasp connect
 ```
 
-## Core Pattern (3 steps)
+`npx grasp` / `grasp connect` only bootstrap the local runtime. MCP tools are the public runtime surface. This skill is the recommended task-facing layer on top of the same runtime.
+
+That bootstrap step also establishes the local Chrome/CDP connection Grasp needs. Treat that as bootstrap plumbing, not as a separate manual prerequisite in the normal local path.
+
+For the canonical product-layer mapping, see [Agent Web Runtime](../docs/product/browser-runtime-for-agents.md).
+
+## Core Pattern
 
 ```
-1. navigate(url)           → land on page
-2. get_hint_map()          → see what's interactable
-3. click(hintId) / type()  → act
+1. entry(url)              → enter with session-aware strategy
+2. inspect()               → see whether the page is readable or gated
+3. extract()               → read content or continue with runtime tools
 ```
 
-Repeat steps 2–3 until the task is done. Use `get_page_summary` or `screenshot` to verify results.
+Repeat the loop until the task is done. Use `get_page_summary` or `screenshot` to verify results.
 
 **Re-scan rule:** Call `get_hint_map` again after every navigation, click that loads a new page, or DOM change. Old hint IDs are invalid after any page update.
+
+## Runtime Surface
+
+The same interface keeps `Runtime Engine` first-class. In this slice, `Data Engine` is only a thin read seam and selection direction for public-web reads, while the current implementation still reads through the browser path and shared projection contract:
+
+- `Runtime Engine` for authenticated browser work, live sessions, handoff, and recovery
+- `Data Engine` for public-web discovery and extraction
+
+That keeps the product from collapsing into either a single BOSS-style workflow or a scraping-only story, without overstating `Data Engine` as a fully delivered separate backend.
+
+Use the public MCP tools first:
+
+- `entry` enters a URL with session-aware strategy
+- `inspect` reports whether the page is readable, gated, or still waiting on recovery
+- `extract` returns the page content in a usable form
+- `continue` decides the next step without firing a browser action
+
+Prefer real browsing and the current live page/session before falling back to heavier observation or search-like shortcuts.
+
+If the public runtime surface is enough, stay there. The lower-level primitives below are only for advanced control when the default runtime surface is not enough.
+
+## Lower-Level Primitives
+
+The sections below describe lower-level runtime primitives and mode details. They sit beneath the public runtime surface above.
 
 ## Hint Map vs Screenshot
 
@@ -49,6 +79,15 @@ Hint Map costs 90%+ fewer tokens than raw HTML or screenshot OCR.
 
 **WebMCP mode** (pages exposing `window.__webmcp__`): `navigate` auto-detects it. Use `call_webmcp_tool` for native API calls. `get_status` shows current mode.
 
+## Recovery
+
+When a human step is required, keep the workflow continuous instead of restarting:
+
+1. `request_handoff` records the required human step
+2. `mark_handoff_done` marks the step complete
+3. `resume_after_handoff` reacquires the page with continuation evidence
+4. `continue` decides what should happen next
+
 ## Safety Mode
 
 High-risk clicks (destructive buttons, payment confirms) are intercepted automatically when `GRASP_SAFE_MODE=true` (default). Use `confirm_click(hintId)` to proceed after reviewing.
@@ -64,4 +103,4 @@ High-risk clicks (destructive buttons, payment confirms) are intercepted automat
 
 ## Full Tool Reference
 
-See [references/tools.md](references/tools.md) for all tools, parameters, and usage notes.
+For the public runtime surface and the lower-level runtime primitives that sit beneath it, see [docs/reference/mcp-tools.md](../docs/reference/mcp-tools.md).
