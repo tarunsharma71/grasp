@@ -68,3 +68,13 @@ test('buildAgentBoundary infers handoff from gated flow', () => {
   assert.equal(boundary.next_step, 'request_handoff');
   assert.match(boundary.summary, /handoff/i);
 });
+
+test('buildAgentBoundary falls back to page role when route metadata is absent', () => {
+  const boundary = buildAgentBoundary({
+    status: 'direct',
+    page: { page_role: 'content' },
+  });
+
+  assert.equal(boundary.key, 'public_read');
+  assert.equal(boundary.next_step, 'inspect');
+});

@@ -59,7 +59,7 @@ extract / extract_structured / extract_batch / share_page / continue
 explain_route              (when route choice matters)
 ```
 
-When a high-level tool responds, read the `Boundary: ...` block before picking the next action. The same response also carries structured `agent_boundary` metadata with the current surface key, preferred tools, avoid list, confirmation rule, and next step.
+When a high-level tool responds, read the `Boundary: ...` block before picking the next action. The same response also carries structured `agent_boundary` metadata plus `agent_prompt`, which includes the assembled `system_prompt`, prompt segments, and chosen boundary/surface prompt packs for the current step. If a form or workspace tool is used on the wrong surface, expect a `BOUNDARY_MISMATCH` response and follow its recovery step instead of retrying blindly.
 
 ### 3.2 Structured extraction
 

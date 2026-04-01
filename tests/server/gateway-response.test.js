@@ -46,6 +46,11 @@ test('buildGatewayResponse injects agent boundary guidance into text and meta', 
   });
 
   assert.equal(response.meta.agent_boundary.key, 'public_read');
+  assert.equal(response.meta.agent_prompt.boundary_key, 'public_read');
+  assert.equal(response.meta.agent_prompt.surface_key, 'public_content');
+  assert.equal(response.meta.agent_prompt.prompt_pack.boundary, 'public_read');
+  assert.equal(response.meta.agent_prompt.prompt_pack.surface, 'public_content');
+  assert.match(response.meta.agent_prompt.system_prompt, /Current boundary: public_read/);
   assert.match(response.content[0].text, /Boundary: public_read/);
   assert.match(response.content[0].text, /Boundary guidance:/);
 });

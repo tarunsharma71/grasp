@@ -46,6 +46,35 @@ function isBlockedHandoffState(handoffState) {
     || handoffState === 'awaiting_reacquisition';
 }
 
+function isGatedPageState(pageState = {}) {
+  return pageState.riskGateDetected || pageState.currentRole === 'checkpoint';
+}
+
+function getEntryDirectNextAction(pageState = {}) {
+  if (pageState.currentRole === 'workspace' || pageState.workspaceSurface != null) {
+    return 'workspace_inspect';
+  }
+  if (pageState.currentRole === 'form' || pageState.currentRole === 'auth') {
+    return 'form_inspect';
+  }
+  return 'extract';
+}
+
+function resolvedDirectEntry(outcome = {}) {
+  return outcome.verified === true && !isGatedPageState(outcome.pageState ?? {});
+}
+
+function getEffectiveEntryHandoff(outcome = {}) {
+  if (resolvedDirectEntry(outcome)) {
+    return {
+      ...(outcome.handoff ?? {}),
+      state: 'idle',
+    };
+  }
+
+  return outcome.handoff ?? null;
+}
+
 function getGatewayStatus(state) {
   const pageState = state.pageState ?? {};
   const handoffState = state.handoff?.state ?? 'idle';
@@ -81,7 +110,15 @@ function buildGatewayOutcome(outcome) {
   const handoffState = outcome.handoff?.state ?? 'idle';
   const pageState = outcome.pageState ?? {};
 
-  if (isBlockedHandoffState(handoffState) || pageState.riskGateDetected || pageState.currentRole === 'checkpoint') {
+  if (resolvedDirectEntry(outcome)) {
+    return {
+      status: 'direct',
+      canContinue: true,
+      suggestedNextAction: getEntryDirectNextAction(pageState),
+    };
+  }
+
+  if (isBlockedHandoffState(handoffState) || isGatedPageState(pageState)) {
     return {
       status: 'gated',
       canContinue: false,
@@ -222,7 +259,11 @@ export function registerGatewayTools(server, state, deps = {}) {
       const confirmationError = requireConfirmedRuntimeInstance(state, instance, 'entry');
       if (confirmationError) return confirmationError;
       const outcome = await enter({ url, state, deps: { auditName: 'entry' } });
-      const gatewayOutcome = buildGatewayOutcome(outcome);
+      const effectiveHandoff = getEffectiveEntryHandoff(outcome);
+      const gatewayOutcome = buildGatewayOutcome({
+        ...outcome,
+        handoff: effectiveHandoff,
+      });
       const preferCurrentUrl = outcome.preflight?.recommended_entry_strategy === 'handoff_or_preheat';
       const route = decideRoute({
         url,
@@ -230,7 +271,7 @@ export function registerGatewayTools(server, state, deps = {}) {
         selection: selectEngine({ tool: intent, url }),
         preflight: outcome.preflight,
         pageState: outcome.pageState ?? state.pageState,
-        handoff: outcome.handoff ?? state.handoff,
+        handoff: effectiveHandoff ?? state.handoff,
       });
       const routeTrace = {
         url,
@@ -250,7 +291,7 @@ export function registerGatewayTools(server, state, deps = {}) {
         continuation: {
           can_continue: gatewayOutcome.canContinue,
           suggested_next_action: gatewayOutcome.suggestedNextAction,
-          handoff_state: outcome.handoff?.state ?? state.handoff?.state ?? 'idle',
+          handoff_state: effectiveHandoff?.state ?? state.handoff?.state ?? 'idle',
         },
         evidence: { strategy: outcome.preflight ?? null },
         runtime: instance ? { instance } : {},

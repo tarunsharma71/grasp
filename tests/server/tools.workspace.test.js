@@ -130,6 +130,37 @@ test('workspace_inspect short-circuits blocked handoff and gated pages', async (
   }
 });
 
+test('draft_action is blocked when the current surface is not workspace_runtime', async () => {
+  const calls = [];
+  const server = { registerTool(name, spec, handler) { calls.push({ name, handler }); } };
+  const state = {
+    pageState: { currentRole: 'content', graspConfidence: 'high', riskGateDetected: false },
+    handoff: { state: 'idle' },
+  };
+
+  registerWorkspaceTools(server, state, {
+    getActivePage: async () => ({ title: async () => '公开文章', url: () => 'https://example.com/article' }),
+    syncPageState: async () => undefined,
+    getBrowserInstance: async () => null,
+    collectVisibleWorkspaceSnapshot: async () => {
+      throw new Error('collectVisibleWorkspaceSnapshot should not run outside workspace_runtime');
+    },
+    draftWorkspaceAction: async () => {
+      throw new Error('draftWorkspaceAction should not run outside workspace_runtime');
+    },
+  });
+
+  const draftAction = calls.find((entry) => entry.name === 'draft_action');
+  const result = await draftAction.handler({ text: '你好' });
+
+  assert.equal(result.meta.status, 'blocked');
+  assert.equal(result.meta.error_code, 'BOUNDARY_MISMATCH');
+  assert.equal(result.meta.agent_boundary.key, 'public_read');
+  assert.equal(result.meta.continuation.suggested_next_action, 'inspect');
+  assert.match(result.content[0].text, /Boundary mismatch/);
+  assert.match(result.content[0].text, /workspace_runtime/);
+});
+
 test('workspace_inspect prefers select_live_item when there is no active item even with a draft', async () => {
   const calls = [];
   const server = { registerTool(name, spec, handler) { calls.push({ name, handler }); } };

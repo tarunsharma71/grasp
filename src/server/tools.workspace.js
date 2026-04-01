@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { buildGatewayResponse } from './gateway-response.js';
+import { guardExpectedBoundary } from './boundary-guard.js';
 import { getActivePage } from '../layer1-bridge/chrome.js';
 import { clickByHintId } from '../layer3-action/actions.js';
 import { syncPageState } from './state.js';
@@ -19,6 +20,16 @@ function toGatewayPage(page, state) {
     grasp_confidence: state.pageState?.graspConfidence ?? 'unknown',
     risk_gate: state.pageState?.riskGateDetected ?? false,
   };
+}
+
+function getWorkspaceBoundaryGuard(state, toolName, pageInfo) {
+  return guardExpectedBoundary({
+    toolName,
+    expectedBoundary: 'workspace_runtime',
+    status: getWorkspaceStatus(state),
+    page: toGatewayPage(pageInfo, state),
+    handoffState: state.handoff?.state ?? 'idle',
+  });
 }
 
 function pick(snapshot, camelKey, snakeKey, fallback = null) {
@@ -459,11 +470,19 @@ function registerWorkspaceDraftActionTool(server, state, deps) {
       },
     },
     async ({ text }) => {
+      const page = await getPage();
+      await syncState(page, state, { force: true });
+      const pageInfo = {
+        title: await page.title(),
+        url: page.url(),
+      };
+      const boundaryMismatch = getWorkspaceBoundaryGuard(state, 'draft_action', pageInfo);
+      if (boundaryMismatch) return boundaryMismatch;
       const instance = await getBrowserInstance();
       const confirmationError = requireConfirmedRuntimeInstance(state, instance, 'draft_action');
       if (confirmationError) return confirmationError;
-      const page = await getPage();
-      const { pageInfo, snapshot, workspace, workspaceSummary, workspaceSurface } = await loadWorkspacePageContext(page, state, syncState, collectSnapshot);
+      const snapshot = await collectSnapshot(page, state);
+      const { workspaceSummary, workspaceSurface, workspace } = buildWorkspaceSnapshotView(snapshot);
       const status = getWorkspaceStatus(state);
       const continuationAction = status === 'direct' ? 'workspace_inspect' : 'request_handoff';
 
@@ -564,11 +583,18 @@ function registerWorkspaceExecuteActionTool(server, state, deps) {
       },
     },
     async ({ action = 'send', mode = 'preview', confirmation } = {}) => {
+      const page = await getPage();
+      await syncState(page, state, { force: true });
+      const pageInfo = {
+        title: await page.title(),
+        url: page.url(),
+      };
+      const boundaryMismatch = getWorkspaceBoundaryGuard(state, 'execute_action', pageInfo);
+      if (boundaryMismatch) return boundaryMismatch;
       const instance = await getBrowserInstance();
       const confirmationError = requireConfirmedRuntimeInstance(state, instance, 'execute_action');
       if (confirmationError) return confirmationError;
-      const page = await getPage();
-      const { pageInfo, snapshot, workspace, workspaceSummary, workspaceSurface } = await loadWorkspacePageContext(page, state, syncState, collectSnapshot);
+      const snapshot = await collectSnapshot(page, state);
       const executeResult = await actionExecutor({
         state,
         page,
@@ -646,7 +672,15 @@ function registerWorkspaceVerifyOutcomeTool(server, state, deps) {
     },
     async () => {
       const page = await getPage();
-      const { snapshot, workspaceSurface } = await loadWorkspacePageContext(page, state, syncState, collectSnapshot);
+      await syncState(page, state, { force: true });
+      const pageInfo = {
+        title: await page.title(),
+        url: page.url(),
+      };
+      const boundaryMismatch = getWorkspaceBoundaryGuard(state, 'verify_outcome', pageInfo);
+      if (boundaryMismatch) return boundaryMismatch;
+      const snapshot = await collectSnapshot(page, state);
+      const workspaceSurface = snapshot.workspace_surface ?? snapshot.workspaceSurface ?? 'unknown';
       const verification = buildWorkspaceVerification(snapshot);
       const status = getWorkspaceStatus(state);
       const suggestedNextAction = status === 'direct' ? verification.ready_for_next_action : 'request_handoff';
@@ -656,14 +690,9 @@ function registerWorkspaceVerifyOutcomeTool(server, state, deps) {
             ...verification,
             ready_for_next_action: 'request_handoff',
           };
-      const pageInfoAfter = {
-        title: await page.title(),
-        url: page.url(),
-      };
-
       return buildGatewayResponse({
         status,
-        page: toGatewayPage(pageInfoAfter, state),
+        page: toGatewayPage(pageInfo, state),
         result: {
           task_kind: 'workspace',
           verification: publicVerification,
@@ -699,7 +728,15 @@ export function registerWorkspaceTools(server, state, deps = {}) {
     },
     async () => {
       const page = await getPage();
-      const { pageInfo, snapshot, workspace, workspaceSummary, workspaceSurface } = await loadWorkspacePageContext(page, state, syncState, collectSnapshot);
+      await syncState(page, state, { force: true });
+      const pageInfo = {
+        title: await page.title(),
+        url: page.url(),
+      };
+      const boundaryMismatch = getWorkspaceBoundaryGuard(state, 'workspace_inspect', pageInfo);
+      if (boundaryMismatch) return boundaryMismatch;
+      const snapshot = await collectSnapshot(page, state);
+      const { workspace, workspaceSummary, workspaceSurface } = buildWorkspaceSnapshotView(snapshot);
 
       return buildGatewayResponse({
         status: getWorkspaceStatus(state),
@@ -729,11 +766,19 @@ export function registerWorkspaceTools(server, state, deps = {}) {
       },
     },
     async ({ item }) => {
+      const page = await getPage();
+      await syncState(page, state, { force: true });
+      const pageInfo = {
+        title: await page.title(),
+        url: page.url(),
+      };
+      const boundaryMismatch = getWorkspaceBoundaryGuard(state, 'select_live_item', pageInfo);
+      if (boundaryMismatch) return boundaryMismatch;
       const instance = await getBrowserInstance();
       const confirmationError = requireConfirmedRuntimeInstance(state, instance, 'select_live_item');
       if (confirmationError) return confirmationError;
-      const page = await getPage();
-      const { pageInfo, snapshot, workspace, workspaceSummary, workspaceSurface } = await loadWorkspacePageContext(page, state, syncState, collectSnapshot);
+      const snapshot = await collectSnapshot(page, state);
+      const { workspace, workspaceSummary, workspaceSurface } = buildWorkspaceSnapshotView(snapshot);
       const status = getWorkspaceStatus(state);
       const rebuildHints = createWorkspaceRebuildHints(page, state, syncState);
       const selection = await selectWorkspaceItem({

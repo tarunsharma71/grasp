@@ -1,5 +1,6 @@
 import { textResponse } from './responses.js';
 import { buildAgentBoundary, buildAgentBoundaryLines } from './route-boundary.js';
+import { buildAgentPrompt } from './prompt-assembly.js';
 
 function normalizeLines(value) {
   return Array.isArray(value) ? value : [value];
@@ -18,9 +19,18 @@ export function buildGatewayResponse({
 }) {
   const agentBoundary = buildAgentBoundary({
     status,
+    page,
     result,
     continuation,
     route,
+  });
+  const agentPrompt = buildAgentPrompt({
+    status,
+    page,
+    result,
+    continuation,
+    route,
+    agentBoundary,
   });
   const boundaryLines = buildAgentBoundaryLines(agentBoundary);
   const lines = message
@@ -45,6 +55,7 @@ export function buildGatewayResponse({
     evidence,
     runtime,
     ...(agentBoundary ? { agent_boundary: agentBoundary } : {}),
+    ...(agentPrompt ? { agent_prompt: agentPrompt } : {}),
     ...(error_code ? { error_code } : {}),
     ...(route ? { route } : {}),
   });

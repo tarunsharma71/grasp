@@ -4,44 +4,93 @@ const BOUNDARY_TEMPLATES = {
     preferred_tools: ['inspect', 'extract', 'extract_structured', 'extract_batch', 'share_page', 'continue'],
     avoid: ['page-changing actions', 'form_runtime tools', 'workspace_runtime tools'],
     confirmation: null,
+    next_step: 'inspect',
   },
   live_session: {
     summary: 'Stay on the live session runtime loop. Prefer inspect, extract, continue, and explain_route until a specialized surface is clearly present.',
     preferred_tools: ['inspect', 'extract', 'continue', 'explain_route'],
     avoid: ['premature low-level primitives', 'form_runtime tools without a form surface', 'workspace_runtime tools without a workspace surface'],
     confirmation: null,
+    next_step: 'inspect',
   },
   session_warmup: {
     summary: 'Warm the session before direct entry. Use preheat_session first, then re-enter the runtime loop after trust improves.',
     preferred_tools: ['preheat_session', 'entry', 'inspect'],
     avoid: ['repeated direct retries', 'form_runtime tools', 'workspace_runtime tools'],
     confirmation: null,
+    next_step: 'preheat_session',
   },
   form_runtime: {
     summary: 'Use the form surface. Fill safe text fields first, keep review-tier controls explicit, and submit only through safe_submit.',
     preferred_tools: ['form_inspect', 'fill_form', 'set_option', 'set_date', 'verify_form', 'safe_submit'],
     avoid: ['blind field writes', 'raw submit clicks', 'navigate away mid-form'],
     confirmation: 'safe_submit(mode="confirm", confirmation="SUBMIT")',
+    next_step: 'verify_form',
   },
   workspace_runtime: {
     summary: 'Use the workspace surface. Select the live item, draft safely, preview sends, and execute only through execute_action.',
     preferred_tools: ['workspace_inspect', 'select_live_item', 'draft_action', 'execute_action', 'verify_outcome'],
     avoid: ['raw send clicks', 'press Enter to send', 'execute before draft or preview'],
     confirmation: 'execute_action(mode="confirm", confirmation="EXECUTE")',
+    next_step: 'workspace_inspect',
   },
   handoff: {
     summary: 'This flow is blocked on handoff. Stop direct action attempts, persist the handoff step, let the human recover the page, then resume.',
     preferred_tools: ['request_handoff', 'mark_handoff_in_progress', 'mark_handoff_done', 'resume_after_handoff', 'continue'],
     avoid: ['looping retries', 'form_runtime actions while gated', 'workspace_runtime actions while gated'],
     confirmation: null,
+    next_step: 'request_handoff',
   },
 };
+
+function getPageRole(page = null) {
+  return page?.page_role ?? page?.current_role ?? page?.currentRole ?? null;
+}
+
+export function inferSurfaceBoundaryKey({
+  result = {},
+  route = null,
+  page = null,
+} = {}) {
+  if (result?.task_kind === 'form' || route?.selected_mode === 'form_runtime') {
+    return 'form_runtime';
+  }
+
+  if (result?.task_kind === 'workspace' || route?.selected_mode === 'workspace_runtime') {
+    return 'workspace_runtime';
+  }
+
+  if (route?.selected_mode === 'public_read') {
+    return 'public_read';
+  }
+
+  if (route?.selected_mode === 'live_session') {
+    return 'live_session';
+  }
+
+  const pageRole = getPageRole(page);
+  if (pageRole === 'form') {
+    return 'form_runtime';
+  }
+  if (pageRole === 'workspace') {
+    return 'workspace_runtime';
+  }
+  if (pageRole === 'auth') {
+    return 'live_session';
+  }
+  if (['content', 'docs', 'search', 'navigation-heavy'].includes(String(pageRole ?? ''))) {
+    return 'public_read';
+  }
+
+  return null;
+}
 
 export function inferAgentBoundaryKey({
   status,
   result = {},
   continuation = {},
   route = null,
+  page = null,
 } = {}) {
   if (
     status === 'handoff_required'
@@ -64,15 +113,39 @@ export function inferAgentBoundaryKey({
     return 'session_warmup';
   }
 
-  if (route?.selected_mode === 'public_read') {
-    return 'public_read';
+  return inferSurfaceBoundaryKey({ result, route, page });
+}
+
+export function getBoundaryDefaultNextStep(key) {
+  return BOUNDARY_TEMPLATES[key]?.next_step ?? null;
+}
+
+export function buildBoundaryContinuation(key, handoffState = 'idle') {
+  if (!key) {
+    return {
+      can_continue: false,
+      suggested_next_action: null,
+      handoff_state: handoffState,
+    };
   }
 
-  if (route?.selected_mode === 'live_session') {
-    return 'live_session';
-  }
+  return {
+    can_continue: key !== 'handoff',
+    suggested_next_action: getBoundaryDefaultNextStep(key),
+    handoff_state: handoffState,
+  };
+}
 
-  return null;
+export function buildBoundaryMismatchLines({
+  toolName,
+  expectedBoundary,
+  currentBoundary,
+  nextStep = null,
+} = {}) {
+  return [
+    `Boundary mismatch: ${toolName} requires ${expectedBoundary}, but the current surface is ${currentBoundary}.`,
+    nextStep ? `Recover by running ${nextStep} before trying ${toolName} again.` : null,
+  ].filter(Boolean);
 }
 
 export function buildAgentBoundary(input = {}) {
@@ -86,7 +159,7 @@ export function buildAgentBoundary(input = {}) {
     preferred_tools: [...template.preferred_tools],
     avoid: [...template.avoid],
     confirmation: template.confirmation,
-    next_step: input?.continuation?.suggested_next_action ?? null,
+    next_step: input?.continuation?.suggested_next_action ?? template.next_step ?? null,
   };
 }
 

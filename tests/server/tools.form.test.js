@@ -126,6 +126,41 @@ test('fill_form is blocked until the runtime instance is explicitly confirmed', 
   assert.equal(result.meta.error_code, 'INSTANCE_CONFIRMATION_REQUIRED');
 });
 
+test('fill_form is blocked when the current surface is not form_runtime', async () => {
+  const { registerFormTools } = await import('../../src/server/tools.form.js');
+  const calls = [];
+  const server = { registerTool(name, spec, handler) { calls.push({ name, handler }); } };
+  const state = {
+    pageState: { currentRole: 'content', graspConfidence: 'high', riskGateDetected: false },
+    handoff: { state: 'idle' },
+  };
+
+  registerFormTools(server, state, {
+    getActivePage: async () => createFakePage({
+      url: () => 'https://example.com/article',
+      title: () => '公开文章',
+    }),
+    getBrowserInstance: async () => null,
+    syncPageState: async () => undefined,
+    collectVisibleFormSnapshot: async () => {
+      throw new Error('collectVisibleFormSnapshot should not run outside form_runtime');
+    },
+    fillSafeFields: async () => {
+      throw new Error('fillSafeFields should not run outside form_runtime');
+    },
+  });
+
+  const fillForm = calls.find((tool) => tool.name === 'fill_form');
+  const result = await fillForm.handler({ values: { 姓名: '张三' } });
+
+  assert.equal(result.meta.status, 'blocked');
+  assert.equal(result.meta.error_code, 'BOUNDARY_MISMATCH');
+  assert.equal(result.meta.agent_boundary.key, 'public_read');
+  assert.equal(result.meta.continuation.suggested_next_action, 'inspect');
+  assert.match(result.content[0].text, /Boundary mismatch/);
+  assert.match(result.content[0].text, /form_runtime/);
+});
+
 test('set_option blocks sensitive fields and returns unresolved for ambiguous labels', async () => {
   const { registerFormTools } = await import('../../src/server/tools.form.js');
   const calls = [];

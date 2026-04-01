@@ -91,6 +91,66 @@ test('entry marks handoff or preheat outcomes as gated', async () => {
   assert.equal(result.meta.agent_boundary.key, 'handoff');
 });
 
+test('entry ignores stale handoff state after a verified direct public entry', async () => {
+  const calls = [];
+  const server = { registerTool(name, spec, handler) { calls.push({ name, handler }); } };
+  const state = {
+    pageState: { currentRole: 'content', graspConfidence: 'high', riskGateDetected: false },
+    handoff: { state: 'idle' },
+  };
+
+  registerGatewayTools(server, state, {
+    enterWithStrategy: async () => ({
+      url: 'https://example.com',
+      title: 'Example',
+      preflight: { session_trust: 'medium', recommended_entry_strategy: 'direct' },
+      pageState: { currentRole: 'content', graspConfidence: 'high', riskGateDetected: false },
+      handoff: { state: 'handoff_required', expected_url_contains: 'github.com' },
+      verified: true,
+      final_url: 'https://example.com',
+    }),
+    getBrowserInstance: async () => null,
+  });
+
+  const entry = calls.find((tool) => tool.name === 'entry');
+  const result = await entry.handler({ url: 'https://example.com', intent: 'extract' });
+
+  assert.equal(result.meta.status, 'direct');
+  assert.equal(result.meta.agent_boundary.key, 'public_read');
+  assert.equal(result.meta.route.selected_mode, 'public_read');
+  assert.equal(result.meta.continuation.suggested_next_action, 'extract');
+});
+
+test('entry ignores stale handoff state after a verified direct form entry', async () => {
+  const calls = [];
+  const server = { registerTool(name, spec, handler) { calls.push({ name, handler }); } };
+  const state = {
+    pageState: { currentRole: 'content', graspConfidence: 'high', riskGateDetected: false },
+    handoff: { state: 'idle' },
+  };
+
+  registerGatewayTools(server, state, {
+    enterWithStrategy: async () => ({
+      url: 'https://httpbin.org/forms/post',
+      title: 'HTTPBin Form',
+      preflight: { session_trust: 'medium', recommended_entry_strategy: 'direct' },
+      pageState: { currentRole: 'form', graspConfidence: 'high', riskGateDetected: false },
+      handoff: { state: 'handoff_required', expected_url_contains: 'github.com' },
+      verified: true,
+      final_url: 'https://httpbin.org/forms/post',
+    }),
+    getBrowserInstance: async () => null,
+  });
+
+  const entry = calls.find((tool) => tool.name === 'entry');
+  const result = await entry.handler({ url: 'https://httpbin.org/forms/post', intent: 'submit' });
+
+  assert.equal(result.meta.status, 'direct');
+  assert.equal(result.meta.agent_boundary.key, 'form_runtime');
+  assert.equal(result.meta.route.selected_mode, 'form_runtime');
+  assert.equal(result.meta.continuation.suggested_next_action, 'form_inspect');
+});
+
 test('inspect returns current gateway page status without raw primitive wording', async () => {
   const calls = [];
   const server = { registerTool(name, spec, handler) { calls.push({ name, handler }); } };

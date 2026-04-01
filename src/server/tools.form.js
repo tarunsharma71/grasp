@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { getActivePage } from '../layer1-bridge/chrome.js';
 import { typeByHintId } from '../layer3-action/actions.js';
 import { buildGatewayResponse } from './gateway-response.js';
+import { guardExpectedBoundary } from './boundary-guard.js';
 import { syncPageState } from './state.js';
 import { collectVisibleFormSnapshot } from './form-tasks.js';
 import {
@@ -51,6 +52,16 @@ function getFormContinuation(state) {
     suggested_next_action: 'verify_form',
     handoff_state: handoffState,
   };
+}
+
+function getFormBoundaryGuard(state, toolName, pageInfo) {
+  return guardExpectedBoundary({
+    toolName,
+    expectedBoundary: 'form_runtime',
+    status: getFormStatus(state),
+    page: toGatewayPage(pageInfo, state),
+    handoffState: state.handoff?.state ?? 'idle',
+  });
 }
 
 function isTextLikeField(field) {
@@ -196,11 +207,13 @@ export function registerFormTools(server, state, deps = {}) {
     async () => {
       const page = await getPage();
       await syncState(page, state, { force: true });
-      const snapshot = await collectSnapshot(page);
       const pageInfo = {
         title: await page.title(),
         url: page.url(),
       };
+      const boundaryMismatch = getFormBoundaryGuard(state, 'form_inspect', pageInfo);
+      if (boundaryMismatch) return boundaryMismatch;
+      const snapshot = await collectSnapshot(page);
 
       return buildGatewayResponse({
         status: getFormStatus(state),
@@ -233,11 +246,17 @@ export function registerFormTools(server, state, deps = {}) {
       },
     },
     async ({ values }) => {
+      const page = await getPage();
+      await syncState(page, state, { force: true });
+      const pageInfo = {
+        title: await page.title(),
+        url: page.url(),
+      };
+      const boundaryMismatch = getFormBoundaryGuard(state, 'fill_form', pageInfo);
+      if (boundaryMismatch) return boundaryMismatch;
       const instance = await getBrowserInstance();
       const confirmationError = requireConfirmedRuntimeInstance(state, instance, 'fill_form');
       if (confirmationError) return confirmationError;
-      const page = await getPage();
-      await syncState(page, state, { force: true });
       const rebuildHints = createRebuildHints(page, state, syncState);
       const snapshot = await collectSnapshot(page);
       const operation = await fillFields(
@@ -255,11 +274,6 @@ export function registerFormTools(server, state, deps = {}) {
         values,
       );
       const refreshed = operation.snapshot ?? snapshot;
-      const pageInfo = {
-        title: await page.title(),
-        url: page.url(),
-      };
-
       return buildGatewayResponse({
         status: getFormStatus(state),
         page: toGatewayPage(pageInfo, state),
@@ -305,11 +319,17 @@ export function registerFormTools(server, state, deps = {}) {
       },
     },
     async ({ field, value }) => {
+      const page = await getPage();
+      await syncState(page, state, { force: true });
+      const pageInfo = {
+        title: await page.title(),
+        url: page.url(),
+      };
+      const boundaryMismatch = getFormBoundaryGuard(state, 'set_option', pageInfo);
+      if (boundaryMismatch) return boundaryMismatch;
       const instance = await getBrowserInstance();
       const confirmationError = requireConfirmedRuntimeInstance(state, instance, 'set_option');
       if (confirmationError) return confirmationError;
-      const page = await getPage();
-      await syncState(page, state, { force: true });
       const snapshot = await collectSnapshot(page);
       const operation = await applyControl({
         snapshot,
@@ -323,11 +343,6 @@ export function registerFormTools(server, state, deps = {}) {
         }, resolvedField.label, nextValue),
       }, field, value);
       const refreshed = operation.snapshot ?? snapshot;
-      const pageInfo = {
-        title: await page.title(),
-        url: page.url(),
-      };
-
       return buildGatewayResponse({
         status: getFormStatus(state),
         page: toGatewayPage(pageInfo, state),
@@ -364,11 +379,17 @@ export function registerFormTools(server, state, deps = {}) {
       },
     },
     async ({ field, value }) => {
+      const page = await getPage();
+      await syncState(page, state, { force: true });
+      const pageInfo = {
+        title: await page.title(),
+        url: page.url(),
+      };
+      const boundaryMismatch = getFormBoundaryGuard(state, 'set_date', pageInfo);
+      if (boundaryMismatch) return boundaryMismatch;
       const instance = await getBrowserInstance();
       const confirmationError = requireConfirmedRuntimeInstance(state, instance, 'set_date');
       if (confirmationError) return confirmationError;
-      const page = await getPage();
-      await syncState(page, state, { force: true });
       const snapshot = await collectSnapshot(page);
       const operation = await applyDate({
         snapshot,
@@ -382,11 +403,6 @@ export function registerFormTools(server, state, deps = {}) {
         }, resolvedField.label, nextValue),
       }, field, value);
       const refreshed = operation.snapshot ?? snapshot;
-      const pageInfo = {
-        title: await page.title(),
-        url: page.url(),
-      };
-
       return buildGatewayResponse({
         status: getFormStatus(state),
         page: toGatewayPage(pageInfo, state),
@@ -422,11 +438,13 @@ export function registerFormTools(server, state, deps = {}) {
     async () => {
       const page = await getPage();
       await syncState(page, state, { force: true });
-      const snapshot = await collectSnapshot(page);
       const pageInfo = {
         title: await page.title(),
         url: page.url(),
       };
+      const boundaryMismatch = getFormBoundaryGuard(state, 'verify_form', pageInfo);
+      if (boundaryMismatch) return boundaryMismatch;
+      const snapshot = await collectSnapshot(page);
 
       return buildGatewayResponse({
         status: getFormStatus(state),
@@ -464,19 +482,21 @@ export function registerFormTools(server, state, deps = {}) {
       },
     },
     async ({ mode = 'preview', confirmation } = {}) => {
-      const instance = await getBrowserInstance();
-      const confirmationError = requireConfirmedRuntimeInstance(state, instance, 'safe_submit');
-      if (confirmationError) return confirmationError;
       const page = await getPage();
       await syncState(page, state, { force: true });
-      const snapshot = await collectSnapshot(page);
-      const submit = await previewSubmission({
-        clickSubmit: async (control) => clickSubmitControl(page, control),
-      }, snapshot, { mode, confirmation });
       const pageInfo = {
         title: await page.title(),
         url: page.url(),
       };
+      const boundaryMismatch = getFormBoundaryGuard(state, 'safe_submit', pageInfo);
+      if (boundaryMismatch) return boundaryMismatch;
+      const instance = await getBrowserInstance();
+      const confirmationError = requireConfirmedRuntimeInstance(state, instance, 'safe_submit');
+      if (confirmationError) return confirmationError;
+      const snapshot = await collectSnapshot(page);
+      const submit = await previewSubmission({
+        clickSubmit: async (control) => clickSubmitControl(page, control),
+      }, snapshot, { mode, confirmation });
 
       return buildGatewayResponse({
         status: getFormStatus(state),

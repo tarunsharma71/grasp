@@ -4,19 +4,41 @@ All notable changes to Grasp are documented here.
 
 ---
 
+## v0.6.6 — 2026-04-01
+
+### Added
+- High-level runtime responses now include an `agent_prompt` package in metadata, with a fully assembled `system_prompt`, prompt segments, boundary key, surface key, and selected prompt packs.
+- Added a shared prompt assembly layer so route boundary and visible surface evidence can be turned into a stable system prompt contract instead of only lightweight boundary guidance.
+- Added dedicated surface prompt packs for public read, live session, warmup, handoff, form review, and workspace thread/list/detail/composer/loading surfaces.
+
+### Changed
+- `buildGatewayResponse` now assembles prompt context dynamically from `route` and `surface` evidence without changing the visible response contract.
+- Verified direct `entry` results now override stale persisted handoff state when the current page is already reacquired and non-gated, fixing the first-hop over-handoff path.
+- Public, form, and workspace runtime flows now expose both `agent_boundary` and `agent_prompt`, so agents can see not only the active boundary but also the exact prompt contract for the current surface.
+
+### Validated
+- Full automated suite passes fresh: `284 / 284`.
+- Live smoke on the visible `chrome-grasp` runtime passes for `https://example.com/`, `https://httpbin.org/forms/post`, and the WeChat Official Accounts message workspace.
+- Wrong-surface actions still return `BOUNDARY_MISMATCH` while route/surface-aware prompt assembly is enabled.
+
+---
+
 ## v0.6.5 — 2026-04-01
 
 ### Added
 - High-level runtime responses now inject a surface-specific `agent_boundary` package so agents can see the current operating boundary directly from gateway, form, and workspace results.
 - Added explicit boundary guidance coverage for `public_read`, `live_session`, `session_warmup`, `form_runtime`, `workspace_runtime`, and `handoff`.
+- Added a shared boundary guard so high-level form and workspace tools can stop early when the current surface does not match the requested runtime contract.
 
 ### Changed
 - `buildGatewayResponse` now appends concise boundary text to the visible tool output instead of leaving route/surface discipline only in docs and skills.
 - Gateway, form, and workspace flows now expose the same boundary contract through both response text and structured metadata.
+- `form_*` and `workspace_*` tools now refuse wrong-surface calls with a structured `BOUNDARY_MISMATCH` recovery response instead of trying to act on the wrong page.
 
 ### Validated
 - New route-boundary unit coverage passes for the six boundary modes.
 - Gateway, form, and workspace integration coverage stays green with boundary injection enabled.
+- Wrong-surface boundary guard coverage now passes for both form and workspace action paths.
 
 ---
 
