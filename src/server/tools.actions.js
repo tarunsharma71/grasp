@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { getActivePage, getTabs, navigateTo, switchTab } from '../layer1-bridge/chrome.js';
-import { clickByHintId, typeByHintId, hoverByHintId, pressKey, watchElement, scroll } from '../layer3-action/actions.js';
+import { clickByHintId, typeByHintId, hoverByHintId, pressKey, watchElement, scroll, findScrollableAncestor } from '../layer3-action/actions.js';
 import { errorResponse, textResponse } from './responses.js';
 import { describeMode, syncPageState } from './state.js';
 import { audit } from './audit.js';
@@ -516,30 +516,121 @@ export function registerActionTools(server, state, deps = {}) {
   server.registerTool(
     'scroll',
     {
-      description: 'Scroll the current page up or down and refresh page state.',
+      description: 'Scroll the page or a specific container by pixel amount. Use hint_id to scroll a nested scrollable area (e.g. sidebar, chat list) instead of the whole page. Returns scroll position (scrollTop/scrollHeight). NOTE: If your goal is to make a known element visible, use scroll_into_view instead — it is a single call and much more accurate.',
       inputSchema: {
-        direction: z.enum(['up', 'down']).describe('Scroll direction'),
-        amount: z.number().int().positive().optional().describe('Scroll amount in pixels'),
+        direction: z.enum(['up', 'down', 'left', 'right']).describe('Scroll direction'),
+        amount: z.number().int().positive().optional().describe('Scroll distance in pixels (default: 600). Use small values like 50-150 for precise scrolling.'),
+        hint_id: z.string().optional().describe('Hint ID of an element inside the scrollable container to target'),
       },
     },
-    async ({ direction, amount = 600 }) => {
+    async ({ direction, amount = 600, hint_id }) => {
       const instance = await getBrowserInstance();
       const confirmationError = requireConfirmedRuntimeInstance(state, instance, 'scroll');
       if (confirmationError) return confirmationError;
       const page = await getPage({ state });
-      await syncPageState(page, state);
-      await scroll(page, direction, amount);
-      await syncPageState(page, state, { force: true });
-      await audit('scroll', `${direction} ${amount}`, null, state);
+      await syncState(page, state);
+
+      let scrollTarget = null;
+      let scrollOptions = {};
+
+      if (hint_id) {
+        const normalizedId = String(hint_id).trim();
+        const selector = `[data-grasp-id="${normalizedId}"]`;
+        const ancestorSelector = await findScrollableAncestor(page, selector);
+        if (ancestorSelector) {
+          scrollOptions.selector = ancestorSelector;
+          scrollTarget = ancestorSelector;
+        }
+      }
+
+      await scroll(page, direction, amount, scrollOptions);
+      await syncState(page, state, { force: true });
+
+      const scrollInfo = await page.evaluate((sel) => {
+        const target = sel ? document.querySelector(sel) : document.documentElement;
+        if (!target) return null;
+        return {
+          scrollTop: Math.round(target.scrollTop),
+          scrollHeight: Math.round(target.scrollHeight),
+          clientHeight: Math.round(target.clientHeight),
+          atTop: target.scrollTop <= 0,
+          atBottom: target.scrollTop + target.clientHeight >= target.scrollHeight - 1,
+        };
+      }, scrollTarget);
+
+      const targetLabel = scrollTarget ? `container ${scrollTarget}` : 'page';
+      await audit('scroll', `${direction} ${amount} target=${targetLabel}`, null, state);
+
+      const posInfo = scrollInfo
+        ? ` Position: ${scrollInfo.scrollTop}/${scrollInfo.scrollHeight}px.${scrollInfo.atTop ? ' [AT TOP]' : ''}${scrollInfo.atBottom ? ' [AT BOTTOM]' : ''}`
+        : '';
       return textResponse(
-        `Scrolled ${direction} by ${amount}px.`,
+        `Scrolled ${targetLabel} ${direction} by ${amount}px.${posInfo}`,
         {
           direction,
           amount,
+          target: scrollTarget ?? 'page',
+          ...(scrollInfo ?? {}),
           page_role: state.pageState?.currentRole ?? 'unknown',
           grasp_confidence: state.pageState?.graspConfidence ?? 'unknown',
           dom_revision: state.pageState?.domRevision ?? 0,
         }
+      );
+    }
+  );
+
+  server.registerTool(
+    'scroll_into_view',
+    {
+      description: 'Scroll the page or container so that a specific element becomes visible in the viewport. Uses browser-native scrollIntoView which automatically handles arbitrarily nested scrollable containers in one call. PREFERRED over scroll() when you need to locate a known element — no pixel estimation or evaluate() needed.',
+      inputSchema: {
+        hint_id: z.string().describe('Hint ID of the element to scroll into view'),
+        position: z.enum(['center', 'start', 'end', 'nearest']).optional().describe('Where to place the element in the viewport (default: center)'),
+      },
+    },
+    async ({ hint_id, position = 'center' }) => {
+      const instance = await getBrowserInstance();
+      const confirmationError = requireConfirmedRuntimeInstance(state, instance, 'scroll_into_view');
+      if (confirmationError) return confirmationError;
+      const page = await getPage({ state });
+      await syncState(page, state, { force: true });
+      const normalizedId = String(hint_id).trim();
+      const selector = `[data-grasp-id="${normalizedId}"]`;
+
+      const result = await page.evaluate(({ sel, pos }) => {
+        const el = document.querySelector(sel);
+        if (!el) return { ok: false, reason: 'not_found' };
+
+        const before = el.getBoundingClientRect();
+        el.scrollIntoView({ behavior: 'instant', block: pos, inline: 'nearest' });
+        const after = el.getBoundingClientRect();
+
+        return {
+          ok: true,
+          tag: el.tagName.toLowerCase(),
+          label: el.getAttribute('aria-label') || el.innerText?.trim()?.substring(0, 60) || '',
+          moved: Math.abs(after.top - before.top) > 1 || Math.abs(after.left - before.left) > 1,
+          rect: {
+            top: Math.round(after.top),
+            left: Math.round(after.left),
+            width: Math.round(after.width),
+            height: Math.round(after.height),
+          },
+        };
+      }, { sel: selector, pos: position });
+
+      if (!result.ok) {
+        return errorResponse(`Element [${normalizedId}] not found. Call get_hint_map to refresh.`);
+      }
+
+      await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      await syncState(page, state, { force: true });
+      await audit('scroll_into_view', `[${normalizedId}] position=${position}`, null, state);
+
+      const movedLabel = result.moved ? 'Scrolled to' : 'Already visible:';
+      return textResponse(
+        `${movedLabel} [${normalizedId}] (${result.tag}: "${result.label}"). Position: top=${result.rect.top}px, left=${result.rect.left}px.`,
+        { hint_id: normalizedId, position, moved: result.moved, rect: result.rect }
       );
     }
   );

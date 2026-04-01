@@ -148,6 +148,119 @@ test('get_status reports headless instance identity explicitly', async () => {
   });
 });
 
+test('scroll targets the nearest scrollable container and reports position metadata', async () => {
+  const calls = [];
+  const server = { registerTool(name, spec, handler) { calls.push({ name, handler }); } };
+  const state = {
+    hintMap: [],
+    pageState: { currentRole: 'content', graspConfidence: 'high', domRevision: 7 },
+    handoff: { state: 'idle' },
+    runtimeConfirmation: {
+      instance_key: 'windowed|Chrome/136.0.7103.114|1.3',
+      display: 'windowed',
+      browser: 'Chrome/136.0.7103.114',
+      protocolVersion: '1.3',
+      confirmed_at: 0,
+    },
+  };
+  const documentElement = { scrollTop: 0, scrollHeight: 2400, clientHeight: 900 };
+  const container = {
+    id: 'scroll-container',
+    tagName: 'DIV',
+    contentEditable: 'false',
+    scrollTop: 0,
+    scrollHeight: 1200,
+    clientHeight: 250,
+    scrollWidth: 400,
+    clientWidth: 400,
+    classList: [],
+    getAttribute: () => null,
+    scrollBy: (_dx, dy) => {
+      container.scrollTop += dy;
+    },
+    parentElement: documentElement,
+  };
+  const target = {
+    tagName: 'BUTTON',
+    contentEditable: 'false',
+    scrollHeight: 20,
+    clientHeight: 20,
+    scrollWidth: 20,
+    clientWidth: 20,
+    classList: [],
+    getAttribute: (name) => (name === 'data-grasp-id' ? 'B7' : null),
+    parentElement: container,
+  };
+  const page = createFakePage({
+    evaluate: async (fn, ...args) => {
+      const originalDocument = global.document;
+      const originalWindow = global.window;
+      const originalCss = global.CSS;
+      const originalRequestAnimationFrame = global.requestAnimationFrame;
+
+      global.document = {
+        documentElement,
+        querySelector: (selector) => {
+          if (selector === '[data-grasp-id="B7"]') return target;
+          if (selector === '#scroll-container') return container;
+          return null;
+        },
+      };
+      global.window = {
+        document: global.document,
+        getComputedStyle: (element) => {
+          if (element === container) {
+            return { overflowY: 'auto', overflowX: 'hidden' };
+          }
+          return { overflowY: 'visible', overflowX: 'visible' };
+        },
+      };
+      global.CSS = { escape: (value) => String(value) };
+      global.requestAnimationFrame = (callback) => callback();
+
+      try {
+        return await fn(...args);
+      } finally {
+        global.document = originalDocument;
+        global.window = originalWindow;
+        global.CSS = originalCss;
+        global.requestAnimationFrame = originalRequestAnimationFrame;
+      }
+    },
+  });
+  let syncCalls = 0;
+
+  registerActionTools(server, state, {
+    getActivePage: async () => page,
+    syncPageState: async (_page, currentState) => {
+      syncCalls += 1;
+      currentState.pageState = {
+        currentRole: 'content',
+        graspConfidence: 'high',
+        domRevision: 8,
+      };
+      return currentState;
+    },
+    getBrowserInstance: async () => ({
+      browser: 'Chrome/136.0.7103.114',
+      protocolVersion: '1.3',
+      headless: false,
+      display: 'windowed',
+      warning: null,
+    }),
+  });
+
+  const tool = calls.find((entry) => entry.name === 'scroll');
+  const result = await tool.handler({ direction: 'down', amount: 150, hint_id: 'B7' });
+
+  assert.equal(syncCalls, 2);
+  assert.match(result.content[0].text, /container #scroll-container/);
+  assert.equal(result.meta.target, '#scroll-container');
+  assert.equal(result.meta.scrollTop, 150);
+  assert.equal(result.meta.atTop, false);
+  assert.equal(result.meta.dom_revision, 8);
+});
+
 test('navigate is blocked until the runtime instance is explicitly confirmed', async () => {
   const calls = [];
   const server = { registerTool(name, spec, handler) { calls.push({ name, handler }); } };
