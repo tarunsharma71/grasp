@@ -321,4 +321,19 @@ MIT — 见 [LICENSE](./LICENSE)。
 
 ## Star 历史
 
-[![Star History Chart](https://api.star-history.com/image?repos=Yuzc-001/grasp&type=Date)](https://star-history.com/#Yuzc-001/grasp&Date)
+<a href="https://www.star-history.com/#Yuzc-001/grasp&Date">
+  <picture>
+    <source
+      media="(prefers-color-scheme: dark)"
+      srcset="https://api.star-history.com/svg?repos=Yuzc-001/grasp&type=Date&theme=dark"
+    />
+    <source
+      media="(prefers-color-scheme: light)"
+      srcset="https://api.star-history.com/svg?repos=Yuzc-001/grasp&type=Date"
+    />
+    <img
+      alt="Star History Chart"
+      src="https://api.star-history.com/svg?repos=Yuzc-001/grasp&type=Date"
+    />
+  </picture>
+</a>
