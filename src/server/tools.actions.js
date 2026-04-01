@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { getActivePage, getTabs, navigateTo, switchTab } from '../layer1-bridge/chrome.js';
 import { clickByHintId, typeByHintId, hoverByHintId, pressKey, watchElement, scroll, findScrollableAncestor } from '../layer3-action/actions.js';
-import { errorResponse, textResponse } from './responses.js';
+import { errorResponse, imageResponse, textResponse } from './responses.js';
 import { describeMode, syncPageState } from './state.js';
 import { audit } from './audit.js';
 import { verifyTypeResult, verifyGenericAction } from './postconditions.js';
@@ -632,6 +632,113 @@ export function registerActionTools(server, state, deps = {}) {
         `${movedLabel} [${normalizedId}] (${result.tag}: "${result.label}"). Position: top=${result.rect.top}px, left=${result.rect.left}px.`,
         { hint_id: normalizedId, position, moved: result.moved, rect: result.rect }
       );
+    }
+  );
+
+  server.registerTool(
+    'screenshot',
+    {
+      description: 'Take a screenshot of the current browser viewport, or a specific element by hint ID. Returns base64-encoded PNG image. Use annotate=true to overlay HintMap element labels on the screenshot for visual identification.',
+      inputSchema: {
+        fullPage: z.boolean().optional().describe('Capture the full scrollable page instead of just the viewport'),
+        annotate: z.boolean().optional().describe('Overlay HintMap element IDs on the screenshot (e.g. [B0], [I1], [L2])'),
+        hint_id: z.string().optional().describe('Capture only this element (mutually exclusive with fullPage and annotate)'),
+      },
+    },
+    async ({ fullPage = false, annotate = false, hint_id } = {}) => {
+      try {
+        if (hint_id && (fullPage || annotate)) {
+          return errorResponse('hint_id is mutually exclusive with fullPage and annotate. Use hint_id alone for element screenshots.');
+        }
+
+        const page = await getPage({ state });
+        await page.waitForFunction(
+          () => document.body && document.body.getBoundingClientRect().height > 100,
+          { timeout: 3000 }
+        ).catch(() => {});
+
+        if (annotate) {
+          await syncState(page, state, { force: true });
+          const hints = state.hintMap ?? [];
+          if (hints.length > 0) {
+            await page.evaluate((hintItems) => {
+              const container = document.createElement('div');
+              container.id = '__grasp_annotations__';
+              container.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2147483647;';
+
+              for (const h of hintItems) {
+                const el = document.elementFromPoint(h.x, h.y);
+                if (!el) continue;
+                const rect = el.getBoundingClientRect();
+                if (rect.width === 0 || rect.height === 0) continue;
+
+                const box = document.createElement('div');
+                box.style.cssText = `position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;border:2px solid rgba(255,0,0,0.7);box-sizing:border-box;pointer-events:none;`;
+
+                const tag = document.createElement('div');
+                const labelTop = rect.top > 16 ? '-16px' : `${rect.height + 2}px`;
+                tag.style.cssText = `position:absolute;left:0;top:${labelTop};background:rgba(255,0,0,0.85);color:#fff;font:bold 11px/14px monospace;padding:0 4px;border-radius:2px;white-space:nowrap;`;
+                tag.textContent = h.id;
+                box.appendChild(tag);
+                container.appendChild(box);
+              }
+              document.body.appendChild(container);
+            }, hints);
+          }
+        }
+
+        if (hint_id) {
+          const normalizedId = String(hint_id).trim();
+          await syncState(page, state, { force: true });
+          const selector = `[data-grasp-id="${normalizedId}"]`;
+          const el = page.locator(selector);
+          const count = await el.count();
+          if (count === 0) {
+            return errorResponse(`Element [${normalizedId}] not found for screenshot. Call get_hint_map to refresh available IDs.`);
+          }
+          const box = await el.first().boundingBox();
+          if (!box || box.width === 0 || box.height === 0) {
+            return errorResponse(`Element [${normalizedId}] is not visible (zero bounds). Scroll it into view first.`);
+          }
+          const viewport = page.viewportSize() || await page.evaluate(() => ({
+            width: window.innerWidth,
+            height: window.innerHeight,
+          }));
+          const clip = {
+            x: Math.max(0, box.x),
+            y: Math.max(0, box.y),
+            width: Math.min(box.width, viewport.width - Math.max(0, box.x)),
+            height: Math.min(box.height, viewport.height - Math.max(0, box.y)),
+          };
+          if (clip.width <= 0 || clip.height <= 0) {
+            return errorResponse(`Element [${normalizedId}] is outside the viewport. Use scroll_into_view first.`);
+          }
+          const base64 = await page.screenshot({ encoding: 'base64', clip });
+          return imageResponse(base64);
+        }
+
+        const base64 = await page.screenshot({ encoding: 'base64', fullPage });
+
+        if (annotate) {
+          await page.evaluate(() => {
+            const overlay = document.getElementById('__grasp_annotations__');
+            if (overlay) overlay.remove();
+          });
+        }
+
+        return imageResponse(base64);
+      } catch (err) {
+        try {
+          const p = await getPage({ state });
+          await p.evaluate(() => {
+            const overlay = document.getElementById('__grasp_annotations__');
+            if (overlay) overlay.remove();
+          });
+        } catch {
+          // ignore cleanup errors
+        }
+        return errorResponse(`Screenshot failed: ${err.message}`);
+      }
     }
   );
 }

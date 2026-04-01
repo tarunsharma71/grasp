@@ -261,6 +261,31 @@ test('scroll targets the nearest scrollable container and reports position metad
   assert.equal(result.meta.dom_revision, 8);
 });
 
+test('screenshot returns base64 image content when page capture yields a Buffer', async () => {
+  const calls = [];
+  const server = { registerTool(name, spec, handler) { calls.push({ name, handler }); } };
+  const page = createFakePage({
+    screenshot: async () => Buffer.from('png-binary'),
+    waitForFunction: async () => undefined,
+  });
+  const state = {
+    hintMap: [],
+    pageState: { currentRole: 'content', graspConfidence: 'high' },
+    handoff: { state: 'idle' },
+  };
+
+  registerActionTools(server, state, {
+    getActivePage: async () => page,
+  });
+
+  const tool = calls.find((entry) => entry.name === 'screenshot');
+  const result = await tool.handler();
+
+  assert.strictEqual(result.content[0].type, 'image');
+  assert.strictEqual(result.content[0].data, Buffer.from('png-binary').toString('base64'));
+  assert.strictEqual(result.content[0].mimeType, 'image/png');
+});
+
 test('navigate is blocked until the runtime instance is explicitly confirmed', async () => {
   const calls = [];
   const server = { registerTool(name, spec, handler) { calls.push({ name, handler }); } };
