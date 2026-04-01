@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { inferBrowserInstance } from '../../src/runtime/browser-instance.js';
+import { inferBrowserInstance, requireVisibleBrowserInstance } from '../../src/runtime/browser-instance.js';
 
 test('inferBrowserInstance marks HeadlessChrome endpoints as headless', () => {
   const instance = inferBrowserInstance({
@@ -31,4 +31,29 @@ test('inferBrowserInstance marks Chrome endpoints as windowed instead of visible
     display: 'windowed',
     warning: null,
   });
+});
+
+test('requireVisibleBrowserInstance returns an error for headless endpoints', () => {
+  const message = requireVisibleBrowserInstance({
+    browser: 'HeadlessChrome/136.0.7103.114',
+    protocolVersion: '1.3',
+    headless: true,
+    display: 'headless',
+    warning: 'Current endpoint is a headless browser, not a visible local browser window.',
+  }, 'real browser check');
+
+  assert.match(message, /real browser check requires a visible local browser window/i);
+  assert.match(message, /HeadlessChrome\/136\.0\.7103\.114/);
+});
+
+test('requireVisibleBrowserInstance accepts windowed endpoints', () => {
+  const message = requireVisibleBrowserInstance({
+    browser: 'Chrome/136.0.7103.114',
+    protocolVersion: '1.3',
+    headless: false,
+    display: 'windowed',
+    warning: null,
+  }, 'real browser check');
+
+  assert.equal(message, null);
 });

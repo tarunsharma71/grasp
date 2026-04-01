@@ -229,6 +229,7 @@ async function locateElement(page, hintId, options = {}) {
  */
 export async function clickByHintId(page, hintId, options = {}) {
   const { info, el } = await locateElement(page, hintId, options);
+  const clickCount = Math.max(1, Number(options.clickCount ?? 1));
 
   // 获取元素真实坐标
   const box = await el.boundingBox();
@@ -241,10 +242,14 @@ export async function clickByHintId(page, hintId, options = {}) {
   await warmupMouseIfNeeded(page);
   await page.mouse.move(target.x, target.y, { steps: 15 });
 
-  // 按下 + 随机持续时间 + 抬起，模拟人类按键
-  await page.mouse.down();
-  await new Promise((r) => setTimeout(r, randomInt(40, 120)));
-  await page.mouse.up();
+  if (clickCount > 1) {
+    await page.mouse.click(target.x, target.y, { clickCount });
+  } else {
+    // 按下 + 随机持续时间 + 抬起，模拟人类按键
+    await page.mouse.down();
+    await new Promise((r) => setTimeout(r, randomInt(40, 120)));
+    await page.mouse.up();
+  }
 
   // 等待页面响应（networkidle 或超时）
   await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});

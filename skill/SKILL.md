@@ -53,7 +53,7 @@ Use `workspace_inspect -> select_live_item -> draft_action -> execute_action -> 
 
 ### Lower-level control
 
-Only when the higher-level surface is not enough, use `get_hint_map`, `click`, `type`, `hover`, `scroll`, `scroll_into_view`, `screenshot`, `wait_for`, raw tab tools, cookies, dialogs, file upload, drag-and-drop, and `evaluate`.
+Only when the higher-level surface is not enough, use `get_hint_map`, `click`, `type`, `hover`, `scroll`, `scroll_into_view`, `screenshot`, `wait_for`, `go_back`, `go_forward`, `reload`, raw tab tools, cookies, dialogs, file upload, drag-and-drop, keyboard controls, and `evaluate`.
 
 ## Additional resources
 

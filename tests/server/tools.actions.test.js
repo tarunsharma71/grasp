@@ -369,6 +369,123 @@ test('scroll reports horizontal metadata when scrolling a container sideways', a
   assert.equal(result.meta.atRight, false);
 });
 
+test('scroll_into_view scrolls a hinted element and reports movement metadata', async () => {
+  const calls = [];
+  const server = { registerTool(name, spec, handler) { calls.push({ name, handler }); } };
+  const state = {
+    hintMap: [],
+    pageState: { currentRole: 'content', graspConfidence: 'high', domRevision: 2 },
+    handoff: { state: 'idle' },
+    runtimeConfirmation: {
+      instance_key: 'windowed|Chrome/136.0.7103.114|1.3',
+      display: 'windowed',
+      browser: 'Chrome/136.0.7103.114',
+      protocolVersion: '1.3',
+      confirmed_at: 0,
+    },
+  };
+  const syncOptions = [];
+  let evaluateCalls = 0;
+  const page = createFakePage({
+    evaluate: async (_fn, args) => {
+      evaluateCalls += 1;
+      if (args?.sel) {
+        assert.equal(args.sel, '[data-grasp-id="B12"]');
+        assert.equal(args.pos, 'end');
+        return {
+          ok: true,
+          tag: 'button',
+          label: '继续',
+          moved: true,
+          rect: { top: 88, left: 12, width: 120, height: 32 },
+        };
+      }
+      return undefined;
+    },
+  });
+
+  registerActionTools(server, state, {
+    getActivePage: async () => page,
+    syncPageState: async (_page, currentState, options) => {
+      syncOptions.push(options);
+      currentState.pageState = {
+        currentRole: 'content',
+        graspConfidence: 'high',
+        domRevision: 3,
+      };
+      return currentState;
+    },
+    getBrowserInstance: async () => ({
+      browser: 'Chrome/136.0.7103.114',
+      protocolVersion: '1.3',
+      headless: false,
+      display: 'windowed',
+      warning: null,
+    }),
+  });
+
+  const tool = calls.find((entry) => entry.name === 'scroll_into_view');
+  const result = await tool.handler({ hint_id: 'B12', position: 'end' });
+
+  assert.equal(evaluateCalls, 2);
+  assert.deepEqual(syncOptions, [{ force: true }, { force: true }]);
+  assert.match(result.content[0].text, /Scrolled to \[B12\] \(button: "继续"\)/);
+  assert.equal(result.meta.hint_id, 'B12');
+  assert.equal(result.meta.position, 'end');
+  assert.equal(result.meta.moved, true);
+  assert.deepEqual(result.meta.rect, { top: 88, left: 12, width: 120, height: 32 });
+});
+
+test('scroll_into_view returns a not found error when the hint is missing', async () => {
+  const calls = [];
+  const server = { registerTool(name, spec, handler) { calls.push({ name, handler }); } };
+  const state = {
+    hintMap: [],
+    pageState: { currentRole: 'content', graspConfidence: 'high' },
+    handoff: { state: 'idle' },
+    runtimeConfirmation: {
+      instance_key: 'windowed|Chrome/136.0.7103.114|1.3',
+      display: 'windowed',
+      browser: 'Chrome/136.0.7103.114',
+      protocolVersion: '1.3',
+      confirmed_at: 0,
+    },
+  };
+  let syncCalls = 0;
+  const page = createFakePage({
+    evaluate: async (_fn, args) => {
+      if (args?.sel) {
+        return { ok: false, reason: 'not_found' };
+      }
+      return undefined;
+    },
+  });
+
+  registerActionTools(server, state, {
+    getActivePage: async () => page,
+    syncPageState: async (_page, currentState, options) => {
+      syncCalls += 1;
+      assert.deepEqual(options, { force: true });
+      currentState.pageState = state.pageState;
+      return currentState;
+    },
+    getBrowserInstance: async () => ({
+      browser: 'Chrome/136.0.7103.114',
+      protocolVersion: '1.3',
+      headless: false,
+      display: 'windowed',
+      warning: null,
+    }),
+  });
+
+  const tool = calls.find((entry) => entry.name === 'scroll_into_view');
+  const result = await tool.handler({ hint_id: 'B404' });
+
+  assert.equal(syncCalls, 1);
+  assert.match(result.content[0].text, /Element \[B404\] not found\. Call get_hint_map to refresh\./);
+  assert.equal(result.isError, true);
+});
+
 test('screenshot returns base64 image content when page capture yields a Buffer', async () => {
   const calls = [];
   const server = { registerTool(name, spec, handler) { calls.push({ name, handler }); } };
@@ -391,6 +508,36 @@ test('screenshot returns base64 image content when page capture yields a Buffer'
 
   assert.strictEqual(result.content[0].type, 'image');
   assert.strictEqual(result.content[0].data, Buffer.from('png-binary').toString('base64'));
+  assert.strictEqual(result.content[0].mimeType, 'image/png');
+});
+
+test('screenshot supports fullPage capture at action tool level', async () => {
+  const calls = [];
+  const server = { registerTool(name, spec, handler) { calls.push({ name, handler }); } };
+  const captureOptions = [];
+  const page = createFakePage({
+    screenshot: async (options) => {
+      captureOptions.push(options);
+      return 'base64-screenshot';
+    },
+    waitForFunction: async () => undefined,
+  });
+  const state = {
+    hintMap: [],
+    pageState: { currentRole: 'content', graspConfidence: 'high' },
+    handoff: { state: 'idle' },
+  };
+
+  registerActionTools(server, state, {
+    getActivePage: async () => page,
+  });
+
+  const tool = calls.find((entry) => entry.name === 'screenshot');
+  const result = await tool.handler({ fullPage: true });
+
+  assert.deepEqual(captureOptions, [{ encoding: 'base64', fullPage: true }]);
+  assert.strictEqual(result.content[0].type, 'image');
+  assert.strictEqual(result.content[0].data, 'base64-screenshot');
   assert.strictEqual(result.content[0].mimeType, 'image/png');
 });
 
@@ -460,6 +607,159 @@ test('confirm_runtime_instance unlocks actions for the same runtime instance', a
 
   assert.match(confirmResult.content[0].text, /Runtime instance confirmed: windowed/);
   assert.match(navigateResult.content[0].text, /Navigated to: https:\/\/example\.com/);
+});
+
+test('go_back navigates browser history and reports changed metadata', async () => {
+  const calls = [];
+  const server = { registerTool(name, spec, handler) { calls.push({ name, handler }); } };
+  let currentUrl = 'https://example.com/detail';
+  const goBackOptions = [];
+  let syncCalls = 0;
+  const page = createFakePage({
+    url: () => currentUrl,
+    goBack: async (options) => {
+      goBackOptions.push(options);
+      currentUrl = 'https://example.com/list';
+      return { ok: true };
+    },
+  });
+  const state = {
+    hintMap: [],
+    pageState: { currentRole: 'content', graspConfidence: 'high', riskGateDetected: false },
+    handoff: { state: 'idle' },
+    runtimeConfirmation: {
+      instance_key: 'windowed|Chrome/136.0.7103.114|1.3',
+      display: 'windowed',
+      browser: 'Chrome/136.0.7103.114',
+      protocolVersion: '1.3',
+      confirmed_at: 0,
+    },
+  };
+
+  registerActionTools(server, state, {
+    getActivePage: async () => page,
+    syncPageState: async (_page, currentState, options) => {
+      syncCalls += 1;
+      assert.deepEqual(options, { force: true });
+      currentState.pageState = state.pageState;
+      return currentState;
+    },
+    getBrowserInstance: async () => ({
+      browser: 'Chrome/136.0.7103.114',
+      protocolVersion: '1.3',
+      headless: false,
+      display: 'windowed',
+      warning: null,
+    }),
+  });
+
+  const tool = calls.find((entry) => entry.name === 'go_back');
+  const result = await tool.handler();
+
+  assert.equal(syncCalls, 1);
+  assert.deepEqual(goBackOptions, [{ waitUntil: 'domcontentloaded', timeout: 10000 }]);
+  assert.match(result.content[0].text, /Navigated back: https:\/\/example\.com\/list/);
+  assert.equal(result.meta.url, 'https://example.com/list');
+  assert.equal(result.meta.changed, true);
+});
+
+test('go_forward reports no history when no forward entry exists', async () => {
+  const calls = [];
+  const server = { registerTool(name, spec, handler) { calls.push({ name, handler }); } };
+  const goForwardOptions = [];
+  const page = createFakePage({
+    url: () => 'https://example.com/list',
+    goForward: async (options) => {
+      goForwardOptions.push(options);
+      return null;
+    },
+  });
+  const state = {
+    hintMap: [],
+    pageState: { currentRole: 'content', graspConfidence: 'high', riskGateDetected: false },
+    handoff: { state: 'idle' },
+    runtimeConfirmation: {
+      instance_key: 'windowed|Chrome/136.0.7103.114|1.3',
+      display: 'windowed',
+      browser: 'Chrome/136.0.7103.114',
+      protocolVersion: '1.3',
+      confirmed_at: 0,
+    },
+  };
+
+  registerActionTools(server, state, {
+    getActivePage: async () => page,
+    syncPageState: async (_page, currentState, options) => {
+      assert.deepEqual(options, { force: true });
+      currentState.pageState = state.pageState;
+      return currentState;
+    },
+    getBrowserInstance: async () => ({
+      browser: 'Chrome/136.0.7103.114',
+      protocolVersion: '1.3',
+      headless: false,
+      display: 'windowed',
+      warning: null,
+    }),
+  });
+
+  const tool = calls.find((entry) => entry.name === 'go_forward');
+  const result = await tool.handler();
+
+  assert.deepEqual(goForwardOptions, [{ waitUntil: 'domcontentloaded', timeout: 10000 }]);
+  assert.match(result.content[0].text, /No forward page in history\./);
+  assert.equal(result.meta.url, 'https://example.com/list');
+  assert.equal(result.meta.changed, false);
+});
+
+test('reload refreshes the active page with domcontentloaded wait strategy', async () => {
+  const calls = [];
+  const server = { registerTool(name, spec, handler) { calls.push({ name, handler }); } };
+  const reloadOptions = [];
+  let syncCalls = 0;
+  const page = createFakePage({
+    url: () => 'https://example.com/list',
+    reload: async (options) => {
+      reloadOptions.push(options);
+    },
+  });
+  const state = {
+    hintMap: [],
+    pageState: { currentRole: 'content', graspConfidence: 'high', riskGateDetected: false },
+    handoff: { state: 'idle' },
+    runtimeConfirmation: {
+      instance_key: 'windowed|Chrome/136.0.7103.114|1.3',
+      display: 'windowed',
+      browser: 'Chrome/136.0.7103.114',
+      protocolVersion: '1.3',
+      confirmed_at: 0,
+    },
+  };
+
+  registerActionTools(server, state, {
+    getActivePage: async () => page,
+    syncPageState: async (_page, currentState, options) => {
+      syncCalls += 1;
+      assert.deepEqual(options, { force: true });
+      currentState.pageState = state.pageState;
+      return currentState;
+    },
+    getBrowserInstance: async () => ({
+      browser: 'Chrome/136.0.7103.114',
+      protocolVersion: '1.3',
+      headless: false,
+      display: 'windowed',
+      warning: null,
+    }),
+  });
+
+  const tool = calls.find((entry) => entry.name === 'reload');
+  const result = await tool.handler();
+
+  assert.equal(syncCalls, 1);
+  assert.deepEqual(reloadOptions, [{ waitUntil: 'domcontentloaded', timeout: 15000 }]);
+  assert.match(result.content[0].text, /Reloaded: https:\/\/example\.com\/list/);
+  assert.equal(result.meta.url, 'https://example.com/list');
 });
 
 test('get_page_summary uses the runtime branch for non-BOSS runtime hosts', async () => {
@@ -760,4 +1060,67 @@ test('wait_for uses getByText for text conditions with special characters', asyn
   assert.deepEqual(requested, [targetText]);
   assert.deepEqual(waits, [{ state: 'visible', timeout: 4321 }]);
   assert.match(result.content[0].text, /appeared on the page/);
+});
+
+test('double_click must trigger double-click semantics at action-tool level', async () => {
+  const calls = [];
+  const server = { registerTool(name, spec, handler) { calls.push({ name, handler }); } };
+  const state = {
+    hintMap: [],
+    pageState: { currentRole: 'content', graspConfidence: 'high', riskGateDetected: false },
+    handoff: { state: 'idle' },
+    runtimeConfirmation: {
+      instance_key: 'windowed|Chrome/136.0.7103.114|1.3',
+      display: 'windowed',
+      browser: 'Chrome/136.0.7103.114',
+      protocolVersion: '1.3',
+      confirmed_at: 0,
+    },
+  };
+  const page = createFakePage({
+    evaluate: async (_fn, ...args) => {
+      if (args.length === 1 && typeof args[0] === 'string') {
+        return {
+          inView: true,
+          centerY: 200,
+          tag: 'button',
+          label: '提交',
+        };
+      }
+      if (args.length === 0) {
+        return { w: 1280, h: 720 };
+      }
+      return null;
+    },
+    $: async () => ({
+      boundingBox: async () => ({ x: 50, y: 80, width: 120, height: 40 }),
+    }),
+    waitForLoadState: async () => undefined,
+  });
+
+  registerActionTools(server, state, {
+    getActivePage: async () => page,
+    syncPageState: async (_page, currentState) => {
+      currentState.pageState = state.pageState;
+      return currentState;
+    },
+    getBrowserInstance: async () => ({
+      browser: 'Chrome/136.0.7103.114',
+      protocolVersion: '1.3',
+      headless: false,
+      display: 'windowed',
+      warning: null,
+    }),
+  });
+
+  const tool = calls.find((entry) => entry.name === 'double_click');
+  const result = await tool.handler({ hint_id: 'B5' });
+  const downCount = page.actionsLog.filter((entry) => entry.target === 'mouse' && entry.method === 'down').length;
+  const clickWithDoubleCount = page.actionsLog.some((entry) => entry.target === 'mouse' && entry.method === 'click' && entry.args[2]?.clickCount === 2);
+
+  assert.match(result.content[0].text, /Double-clicked \[B5\]/);
+  assert.ok(
+    downCount >= 2 || clickWithDoubleCount,
+    `expected double-click semantics, got actions: ${JSON.stringify(page.actionsLog)}`
+  );
 });

@@ -3,8 +3,25 @@ import assert from 'node:assert/strict';
 import { createGraspServer } from '../src/server/index.js';
 import { createFakePage } from './helpers/fake-page.js';
 
+const confirmedInstance = {
+  browser: 'Chrome/136.0.7103.114',
+  protocolVersion: '1.3',
+  headless: false,
+  display: 'windowed',
+  warning: null,
+};
+
+const confirmedRuntime = {
+  instance_key: 'windowed|Chrome/136.0.7103.114|1.3',
+  display: 'windowed',
+  browser: 'Chrome/136.0.7103.114',
+  protocolVersion: '1.3',
+  confirmed_at: 0,
+};
+
 test('live web simulation: switch task and navigate records isolated history', async () => {
   const { state } = createGraspServer();
+  state.runtimeConfirmation = { ...confirmedRuntime };
   
   // 1. Mock dependencies for the action tools
   const page = createFakePage({ url: 'https://initial.com' });
@@ -25,11 +42,13 @@ test('live web simulation: switch task and navigate records isolated history', a
 
   registerActionTools(mockServer, state, {
     getActivePage: async () => page,
+    getBrowserInstance: async () => null,
     navigateTo: async (url) => {
       page.url = () => url;
       return page;
     },
-    syncPageState: async () => {}
+    syncPageState: async () => {},
+    getBrowserInstance: async () => confirmedInstance,
   });
   registerTaskTools(mockServer, state);
 

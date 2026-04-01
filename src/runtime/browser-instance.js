@@ -33,6 +33,21 @@ export function inferBrowserInstance(versionInfo = {}) {
   };
 }
 
+export function requireVisibleBrowserInstance(instance, contextLabel = 'This check') {
+  if (instance?.headless === false) return null;
+
+  const label = typeof contextLabel === 'string' && contextLabel.trim()
+    ? contextLabel.trim()
+    : 'This check';
+
+  if (instance?.headless === true) {
+    const browser = instance.browser ?? 'unknown browser';
+    return `${label} requires a visible local browser window. Current browser: ${browser}`;
+  }
+
+  return `${label} requires a visible local browser window. Current browser could not be identified.`;
+}
+
 export async function readBrowserInstance(cdpUrl, {
   fetchImpl = fetch,
   timeout = DEFAULT_TIMEOUT,

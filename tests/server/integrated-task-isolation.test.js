@@ -15,6 +15,7 @@ test('integrated task switching isolates action history via dependency injection
   
   registerActionTools(server, state, {
     getActivePage: async () => page,
+    getBrowserInstance: async () => null,
     navigateTo: async (url) => {
       page.url = () => url;
       return page;

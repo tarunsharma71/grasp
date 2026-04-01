@@ -14,6 +14,7 @@ test('form_inspect returns task_kind form with sections, fields, and ambiguity e
       url: () => 'https://example.com/form',
       title: () => '简历编辑',
     }),
+    getBrowserInstance: async () => null,
     syncPageState: async () => undefined,
     collectVisibleFormSnapshot: async () => ({
       sections: [{ name: '教育经历', field_labels: ['学校名称'] }],
@@ -46,6 +47,7 @@ test('fill_form returns written skipped unresolved refreshed form and write evid
       url: () => 'https://example.com/form',
       title: () => '简历编辑',
     }),
+    getBrowserInstance: async () => null,
     syncPageState: async () => undefined,
     collectVisibleFormSnapshot: async () => ({
       sections: [{ name: '教育经历', field_labels: ['学校名称'] }],
@@ -133,6 +135,7 @@ test('set_option blocks sensitive fields and returns unresolved for ambiguous la
       url: () => 'https://example.com/form',
       title: () => '简历编辑',
     }),
+    getBrowserInstance: async () => null,
     syncPageState: async () => undefined,
     collectVisibleFormSnapshot: async () => ({
       sections: [{ name: '表单', field_labels: ['期望工作城市', '证件号码', '感兴趣的部门'] }],
@@ -177,6 +180,7 @@ test('set_date and verify_form return refreshed form state and next action', asy
       url: () => 'https://example.com/form',
       title: () => '简历编辑',
     }),
+    getBrowserInstance: async () => null,
     syncPageState: async () => undefined,
     collectVisibleFormSnapshot: async () => currentSnapshot,
     applyReviewedDate: async (_runtime, requestedField) => {
@@ -242,6 +246,7 @@ test('safe_submit returns preview verification and only confirms with SUBMIT', a
       url: () => 'https://example.com/form',
       title: () => '简历编辑',
     }),
+    getBrowserInstance: async () => null,
     syncPageState: async () => undefined,
     collectVisibleFormSnapshot: async () => ({
       sections: [{ name: '申请信息', field_labels: ['最早入职时间'] }],

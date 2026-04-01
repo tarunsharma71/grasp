@@ -35,6 +35,7 @@ test('entry returns a gateway response with strategy metadata', async () => {
       receivedArgs = args;
       return { url: 'https://example.com', title: 'Example', preflight: { session_trust: 'high' }, pageState: state.pageState };
     },
+    getBrowserInstance: async () => null,
   });
 
   const entry = calls.find((tool) => tool.name === 'entry');
@@ -53,6 +54,7 @@ test('entry marks low-trust preheat outcomes as warmup', async () => {
 
   registerGatewayTools(server, state, {
     enterWithStrategy: async () => ({ url: 'https://github.com', title: 'GitHub', preflight: { session_trust: 'low', recommended_entry_strategy: 'preheat_before_direct_entry' }, pageState: state.pageState }),
+    getBrowserInstance: async () => null,
   });
 
   const entry = calls.find((tool) => tool.name === 'entry');
@@ -74,6 +76,7 @@ test('entry marks handoff or preheat outcomes as gated', async () => {
 
   registerGatewayTools(server, state, {
     enterWithStrategy: async () => ({ url: 'https://github.com', title: 'Just a moment', preflight: { session_trust: 'low', recommended_entry_strategy: 'handoff_or_preheat' }, pageState: state.pageState, handoff: { state: 'handoff_required' } }),
+    getBrowserInstance: async () => null,
   });
 
   const entry = calls.find((tool) => tool.name === 'entry');
@@ -686,6 +689,7 @@ test('smoke: entry returns direct on a direct page', async () => {
 
   registerGatewayTools(server, state, {
     enterWithStrategy: async () => ({ url: 'https://example.com/', title: 'Example Domain', preflight: { session_trust: 'high' }, pageState: state.pageState }),
+    getBrowserInstance: async () => null,
   });
 
   const entry = calls.find((tool) => tool.name === 'entry');

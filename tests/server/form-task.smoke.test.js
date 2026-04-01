@@ -4,12 +4,32 @@ import assert from 'node:assert/strict';
 import { createFakePage } from '../helpers/fake-page.js';
 import { assessGatewayContinuation } from '../../src/server/continuity.js';
 
+const confirmedInstance = {
+  browser: 'Chrome/136.0.7103.114',
+  protocolVersion: '1.3',
+  headless: false,
+  display: 'windowed',
+  warning: null,
+};
+
+const confirmedRuntime = {
+  instance_key: 'windowed|Chrome/136.0.7103.114|1.3',
+  display: 'windowed',
+  browser: 'Chrome/136.0.7103.114',
+  protocolVersion: '1.3',
+  confirmed_at: 0,
+};
+
 function registerFormToolsWithSnapshot(snapshot, overrides = {}) {
   return async () => {
     const { registerFormTools } = await import('../../src/server/tools.form.js');
     const calls = [];
     const server = { registerTool(name, spec, handler) { calls.push({ name, handler }); } };
-    const state = overrides.state ?? { pageState: { currentRole: 'form', graspConfidence: 'high', riskGateDetected: false }, handoff: { state: 'idle' } };
+    const state = overrides.state ?? {
+      pageState: { currentRole: 'form', graspConfidence: 'high', riskGateDetected: false },
+      handoff: { state: 'idle' },
+      runtimeConfirmation: { ...confirmedRuntime },
+    };
 
     registerFormTools(server, state, {
       getActivePage: async () => createFakePage({
@@ -18,6 +38,7 @@ function registerFormToolsWithSnapshot(snapshot, overrides = {}) {
       }),
       syncPageState: async () => undefined,
       collectVisibleFormSnapshot: async () => snapshot,
+      getBrowserInstance: async () => confirmedInstance,
       ...(overrides.deps ?? {}),
     });
 

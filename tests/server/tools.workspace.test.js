@@ -3,6 +3,22 @@ import assert from 'node:assert/strict';
 import { registerTools } from '../../src/server/tools.js';
 import { registerWorkspaceTools } from '../../src/server/tools.workspace.js';
 
+const confirmedInstance = {
+  browser: 'Chrome/136.0.7103.114',
+  protocolVersion: '1.3',
+  headless: false,
+  display: 'windowed',
+  warning: null,
+};
+
+const confirmedRuntime = {
+  instance_key: 'windowed|Chrome/136.0.7103.114|1.3',
+  display: 'windowed',
+  browser: 'Chrome/136.0.7103.114',
+  protocolVersion: '1.3',
+  confirmed_at: 0,
+};
+
 test('workspace_inspect returns task_kind workspace with live items and composer state', async () => {
   const calls = [];
   const server = { registerTool(name, spec, handler) { calls.push({ name, handler }); } };
@@ -272,6 +288,7 @@ test('workspace action tools select live items directly while draft_action draft
   const directState = {
     pageState: { currentRole: 'workspace', workspaceSurface: 'thread', graspConfidence: 'high', riskGateDetected: false },
     handoff: { state: 'idle' },
+    runtimeConfirmation: { ...confirmedRuntime },
   };
 
   const directInvocations = [];
@@ -288,6 +305,7 @@ test('workspace action tools select live items directly while draft_action draft
       loading_shell: false,
       summary: { active_item_label: '李女士', draft_present: true, loading_shell: false },
     }),
+    getBrowserInstance: async () => confirmedInstance,
     selectLiveItem: async () => directInvocations.push('select_live_item'),
     draftWorkspaceAction: async (_runtime, text) => {
       directInvocations.push(`draft_action:${text}`);
@@ -401,6 +419,7 @@ test('workspace action tools select live items directly while draft_action draft
   const blockedState = {
     pageState: { currentRole: 'workspace', workspaceSurface: 'thread', graspConfidence: 'high', riskGateDetected: true },
     handoff: { state: 'handoff_required' },
+    runtimeConfirmation: { ...confirmedRuntime },
   };
   const blockedMutations = [];
 
@@ -417,6 +436,7 @@ test('workspace action tools select live items directly while draft_action draft
       loading_shell: false,
       summary: { active_item_label: '李女士', draft_present: true, loading_shell: false },
     }),
+    getBrowserInstance: async () => confirmedInstance,
     selectLiveItem: async () => blockedMutations.push('select_live_item_mutated'),
     draftWorkspaceAction: async () => blockedMutations.push('draft_action_mutated'),
     clickByHintId: async () => blockedMutations.push('execute_action_mutated'),
@@ -458,6 +478,7 @@ test('workspace action tools select live items directly while draft_action draft
   const gatedState = {
     pageState: { currentRole: 'workspace', workspaceSurface: 'thread', graspConfidence: 'high', riskGateDetected: true },
     handoff: { state: 'idle' },
+    runtimeConfirmation: { ...confirmedRuntime },
   };
   const gatedMutations = [];
 
@@ -474,6 +495,7 @@ test('workspace action tools select live items directly while draft_action draft
       loading_shell: false,
       summary: { active_item_label: '李女士', draft_present: true, loading_shell: false },
     }),
+    getBrowserInstance: async () => confirmedInstance,
     selectLiveItem: async () => gatedMutations.push('select_live_item_mutated'),
     draftWorkspaceAction: async () => gatedMutations.push('draft_action_mutated'),
     clickByHintId: async () => gatedMutations.push('execute_action_mutated'),
@@ -561,12 +583,14 @@ test('execute_action exposes unresolved and failed responses without leaking int
     const state = {
       pageState: { currentRole: 'workspace', workspaceSurface: 'thread', graspConfidence: 'high', riskGateDetected: false },
       handoff: { state: 'idle' },
+      runtimeConfirmation: { ...confirmedRuntime },
     };
 
     registerWorkspaceTools(server, state, {
       getActivePage: async () => ({ title: async () => 'BOSS直聘', url: () => 'https://www.zhipin.com/web/geek/chat?id=1' }),
       syncPageState: async () => undefined,
       collectVisibleWorkspaceSnapshot: async () => testCase.executeResult.snapshot,
+      getBrowserInstance: async () => confirmedInstance,
       executeWorkspaceAction: async () => testCase.executeResult,
     });
 
@@ -603,6 +627,7 @@ test('execute_action uses refreshed state when the action changes gateway status
   const state = {
     pageState: { currentRole: 'workspace', workspaceSurface: 'thread', graspConfidence: 'high', riskGateDetected: false },
     handoff: { state: 'idle' },
+    runtimeConfirmation: { ...confirmedRuntime },
   };
 
   registerWorkspaceTools(server, state, {
@@ -618,6 +643,7 @@ test('execute_action uses refreshed state when the action changes gateway status
       loading_shell: false,
       summary: { active_item_label: '李女士', draft_present: true, loading_shell: false },
     }),
+    getBrowserInstance: async () => confirmedInstance,
     executeWorkspaceAction: async () => {
       state.pageState.riskGateDetected = true;
       return {
@@ -799,11 +825,16 @@ test('select_live_item exposes unresolved reasons in the public response', async
   for (const testCase of cases) {
     const calls = [];
     const server = { registerTool(name, spec, handler) { calls.push({ name, handler }); } };
+    const state = {
+      ...testCase.state,
+      runtimeConfirmation: { ...confirmedRuntime },
+    };
 
-    registerWorkspaceTools(server, testCase.state, {
+    registerWorkspaceTools(server, state, {
       getActivePage: async () => ({ title: async () => 'BOSS直聘', url: () => 'https://www.zhipin.com/web/geek/chat?id=1' }),
       syncPageState: async () => undefined,
       collectVisibleWorkspaceSnapshot: testCase.snapshot,
+      getBrowserInstance: async () => confirmedInstance,
       selectLiveItem: async () => ({ ok: true }),
     });
 
@@ -823,6 +854,7 @@ test('select_live_item falls back to clicking a visible workspace row when the l
   const state = {
     pageState: { currentRole: 'workspace', workspaceSurface: 'list', graspConfidence: 'high', riskGateDetected: false },
     handoff: { state: 'idle' },
+    runtimeConfirmation: { ...confirmedRuntime },
   };
   const page = {
     title: async () => 'BOSS直聘',
@@ -870,6 +902,7 @@ test('select_live_item falls back to clicking a visible workspace row when the l
   registerWorkspaceTools(server, state, {
     getActivePage: async () => page,
     syncPageState: async () => undefined,
+    getBrowserInstance: async () => confirmedInstance,
     collectVisibleWorkspaceSnapshot: async () => {
       snapshotCall += 1;
       return snapshotCall === 1 ? initialSnapshot : refreshedSnapshot;
@@ -932,15 +965,17 @@ test('draft_action exposes public-safe unresolved and failed responses', async (
   for (const testCase of cases) {
     const calls = [];
     const server = { registerTool(name, spec, handler) { calls.push({ name, spec, handler }); } };
-    const state = {
-      pageState: { currentRole: 'workspace', workspaceSurface: 'thread', graspConfidence: 'high', riskGateDetected: false },
-      handoff: { state: 'idle' },
-    };
+      const state = {
+        pageState: { currentRole: 'workspace', workspaceSurface: 'thread', graspConfidence: 'high', riskGateDetected: false },
+        handoff: { state: 'idle' },
+        runtimeConfirmation: { ...confirmedRuntime },
+      };
 
-    registerWorkspaceTools(server, state, {
-      getActivePage: async () => ({ title: async () => 'BOSS直聘', url: () => 'https://www.zhipin.com/web/geek/chat?id=1' }),
-      syncPageState: async () => undefined,
-      collectVisibleWorkspaceSnapshot: async () => ({
+      registerWorkspaceTools(server, state, {
+        getActivePage: async () => ({ title: async () => 'BOSS直聘', url: () => 'https://www.zhipin.com/web/geek/chat?id=1' }),
+        syncPageState: async () => undefined,
+        getBrowserInstance: async () => confirmedInstance,
+        collectVisibleWorkspaceSnapshot: async () => ({
         workspace_surface: 'thread',
         live_items: [{ label: '李女士', selected: true, hint_id: 'L1', normalized_label: '李女士' }],
         active_item: { label: '李女士', hint_id: 'L1', normalized_label: '李女士', selected: true },

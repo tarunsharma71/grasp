@@ -4,6 +4,22 @@ import assert from 'node:assert/strict';
 import { createFakePage } from '../helpers/fake-page.js';
 import { assessGatewayContinuation } from '../../src/server/continuity.js';
 
+const confirmedInstance = {
+  browser: 'Chrome/136.0.7103.114',
+  protocolVersion: '1.3',
+  headless: false,
+  display: 'windowed',
+  warning: null,
+};
+
+const confirmedRuntime = {
+  instance_key: 'windowed|Chrome/136.0.7103.114|1.3',
+  display: 'windowed',
+  browser: 'Chrome/136.0.7103.114',
+  protocolVersion: '1.3',
+  confirmed_at: 0,
+};
+
 function registerWorkspaceToolsWithSnapshot(snapshot, deps = {}, stateOverrides = {}) {
   return async () => {
     const { registerWorkspaceTools } = await import('../../src/server/tools.workspace.js');
@@ -12,6 +28,7 @@ function registerWorkspaceToolsWithSnapshot(snapshot, deps = {}, stateOverrides 
     const state = {
       pageState: { currentRole: 'workspace', workspaceSurface: 'thread', graspConfidence: 'high', riskGateDetected: false },
       handoff: { state: 'idle' },
+      runtimeConfirmation: { ...confirmedRuntime },
       ...stateOverrides,
     };
 
@@ -22,6 +39,7 @@ function registerWorkspaceToolsWithSnapshot(snapshot, deps = {}, stateOverrides 
       }),
       syncPageState: async () => undefined,
       collectVisibleWorkspaceSnapshot: async () => snapshot,
+      getBrowserInstance: async () => confirmedInstance,
       ...deps,
     });
 

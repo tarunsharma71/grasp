@@ -4,6 +4,15 @@ All notable changes to Grasp are documented here.
 
 ---
 
+## v0.6.4 — 2026-04-01
+
+### Added
+- Windows Edge 探测与自启动能力，在 Windows 设备上能识别 Edge 进程并同步启动运行时，确保可见引擎自动复活。
+- 支持嵌套与横向滚动 / scroll_into_view，解决复杂布局中嵌套容器和水平滚动时的定位体验。
+- 增强 screenshot，提升截图稳定性与精度，覆盖更动态的页面状态。
+- 新增 tabs、evaluate、dialog、upload、drag、navigation、console、cookies、wait_for、double_click、check、key_down、key_up 等工具，让 agent 能更直接操作分离的页面/窗口/输入层。
+- 引入 `.github/workflows/npm-publish.yml`，为未来的 npm 自动发布流程提供标准化工作流（此次只在仓库中登记，未实际发布）。
+
 ## v0.6.3 — 2026-03-31
 
 The release that makes Grasp legible as a visible AI browser runtime and ships the first structured extraction path on top of the same runtime.

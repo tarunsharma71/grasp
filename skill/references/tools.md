@@ -150,6 +150,7 @@ continue()
 | Click, type, or hover | `click` / `type` / `hover` | Preferred low-level interactions |
 | Scroll a known target into view | `scroll_into_view` | Better than guessing pixels |
 | Scroll the page or a nested container | `scroll` | Supports `up`, `down`, `left`, `right`, and `hint_id` targeting |
+| Move browser history or refresh the page | `go_back` / `go_forward` / `reload` | Useful after navigation detours or retry flows |
 | Wait for text, hidden text, or URL changes | `wait_for` | Uses one condition at a time |
 | Wait for DOM selector changes | `watch_element` | Use when you know a CSS selector |
 | Visual verification | `screenshot` | Full page, element clip, or annotated viewport |
@@ -262,6 +263,15 @@ scroll_into_view(hint_id="L15")
 # or step through the scrollable ancestor
 scroll(direction="down", hint_id="L15", amount=200)
 get_hint_map()
+```
+
+### 6.8 Recover after a navigation detour
+
+```text
+go_back()
+go_forward()
+reload()
+inspect()
 ```
 
 ## 7. Compatibility and legacy tools
