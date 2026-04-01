@@ -2,6 +2,46 @@
 // All browser operations use real CDP mouse/keyboard events (not JS events)
 // to bypass anti-bot detection.
 
+/**
+ * Find the nearest scrollable ancestor of an element via browser-side evaluation.
+ * Returns a unique CSS selector for the scrollable container, or null if none found.
+ */
+export async function findScrollableAncestor(page, selector) {
+  return page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    if (!el) return null;
+
+    let current = el;
+    while (current && current !== document.documentElement) {
+      const style = window.getComputedStyle(current);
+      const overflowY = style.overflowY;
+      const overflowX = style.overflowX;
+      const isNativeScrollable = current.tagName === 'TEXTAREA' ||
+        (current.tagName === 'DIV' && current.contentEditable === 'true');
+      const isCSSScrollable =
+        overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay' ||
+        overflowX === 'auto' || overflowX === 'scroll' || overflowX === 'overlay';
+      const hasOverflow = current.scrollHeight > current.clientHeight || current.scrollWidth > current.clientWidth;
+
+      if ((isNativeScrollable || isCSSScrollable) && hasOverflow) {
+        if (current.id) return `#${CSS.escape(current.id)}`;
+        const graspId = current.getAttribute('data-grasp-id');
+        if (graspId) return `[data-grasp-id="${graspId}"]`;
+        const classes = [...current.classList].map((cls) => `.${CSS.escape(cls)}`).join('');
+        const candidateSelector = `${current.tagName.toLowerCase()}${classes}`;
+        const matches = document.querySelectorAll(candidateSelector);
+        if (matches.length === 1 && matches[0] === current) {
+          return candidateSelector;
+        }
+      }
+
+      current = current.parentElement;
+    }
+
+    return null;
+  }, selector);
+}
+
 function randomInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
@@ -36,29 +76,49 @@ async function warmupMouseIfNeeded(page) {
 }
 
 /**
- * Scroll the page up or down by a given amount using real CDP wheel events.
+ * Scroll the page via CDP wheel events or scroll a specific container via JS when a selector is provided.
  * @param {import('playwright').Page} page
- * @param {'up'|'down'} direction
+ * @param {'up'|'down'|'left'|'right'} direction
  * @param {number} [amount=600]
+ * @param {{ selector?: string }} [options]
  */
-export async function scroll(page, direction, amount = 600) {
-  if (direction !== 'up' && direction !== 'down') {
-    throw new Error(`Invalid scroll direction: "${direction}". Expected "up" or "down".`);
+export async function scroll(page, direction, amount = 600, options = {}) {
+  const validDirections = ['up', 'down', 'left', 'right'];
+  if (!validDirections.includes(direction)) {
+    throw new Error(`Invalid scroll direction: "${direction}". Expected one of: ${validDirections.join(', ')}.`);
   }
   if (amount === 0) return;
-  const delta = direction === 'down' ? amount : -amount;
 
-  // 分多步发送真实 wheel 事件，模拟人类滚轮节奏
+  const isVertical = direction === 'up' || direction === 'down';
+  const delta = (direction === 'down' || direction === 'right') ? amount : -amount;
+  const dx = isVertical ? 0 : delta;
+  const dy = isVertical ? delta : 0;
+
+  if (options.selector) {
+    const scrolled = await page.evaluate(({ selector, dx: scrollX, dy: scrollY }) => {
+      const el = document.querySelector(selector);
+      if (!el) return { ok: false, reason: 'not_found' };
+      el.scrollBy(scrollX, scrollY);
+      return { ok: true, tag: el.tagName.toLowerCase() };
+    }, { selector: options.selector, dx, dy });
+
+    if (!scrolled.ok) {
+      throw new Error(`Scroll target not found: "${options.selector}".`);
+    }
+
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+    return;
+  }
+
   const steps = 5;
-  const stepDelta = delta / steps;
+  const stepDx = dx / steps;
+  const stepDy = dy / steps;
 
   for (let i = 0; i < steps; i++) {
-    await page.mouse.wheel(0, stepDelta);
-    // 步骤间随机间隔 20~60ms
+    await page.mouse.wheel(stepDx, stepDy);
     await new Promise((r) => setTimeout(r, 20 + Math.random() * 40));
   }
 
-  // 等待两帧渲染稳定
   await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
 }
 

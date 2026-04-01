@@ -1,11 +1,51 @@
 import { chromium } from 'playwright-core';
-import { startChromeHint } from '../cli/detect-chrome.js';
+import { spawn } from 'child_process';
+import { join } from 'path';
+import { homedir } from 'os';
+import { detectChromePath, startChromeHint } from '../cli/detect-chrome.js';
 import { writeRuntimeStatus } from '../server/runtime-status.js';
 import { getActiveTaskFrame, isSafeModeEnabled } from '../server/state.js';
 
 const CDP_URL = process.env.CHROME_CDP_URL || 'http://localhost:9222';
 const DEFAULT_RETRY_DELAYS = [0, 250, 1000];
 const SAFE_MODE = isSafeModeEnabled();
+
+async function autoLaunchChrome(cdpUrl) {
+  const chromePath = detectChromePath();
+  if (!chromePath) return false;
+
+  const parsedUrl = new URL(cdpUrl);
+  const localHosts = new Set(['localhost', '127.0.0.1', '::1']);
+  if (!localHosts.has(parsedUrl.hostname)) return false;
+
+  const port = parsedUrl.port || '9222';
+  const userDataDir = join(homedir(), 'chrome-grasp');
+
+  console.error(`[Grasp] Chrome not running — auto-launching: ${chromePath}`);
+  spawn(chromePath, [
+    `--remote-debugging-port=${port}`,
+    `--user-data-dir=${userDataDir}`,
+    '--no-first-run',
+    '--no-default-browser-check',
+    '--start-maximized',
+  ], { detached: true, stdio: 'ignore' }).unref();
+
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    try {
+      const response = await fetch(`${cdpUrl}/json/version`, { signal: AbortSignal.timeout(1500) });
+      if (response.ok) {
+        console.error('[Grasp] Auto-launched Chrome is ready.');
+        return true;
+      }
+    } catch {
+      // not ready yet
+    }
+  }
+
+  console.error('[Grasp] Auto-launch: Chrome did not become reachable in time.');
+  return false;
+}
 
 async function defaultConnect() {
   try {
@@ -111,6 +151,7 @@ export function createConnectionSupervisor({
   persistStatus = defaultPersistStatus,
   safeMode = SAFE_MODE,
   cdpUrl = CDP_URL,
+  autoLaunch = autoLaunchChrome,
 } = {}) {
   let browser = null;
   let pending = null;
@@ -174,6 +215,27 @@ export function createConnectionSupervisor({
         return candidate;
       } catch (error) {
         updateStatus({ lastError: error.message });
+      }
+    }
+
+    if (autoLaunch) {
+      updateStatus({ state: 'auto_launching', lastError: 'CDP unreachable, attempting auto-launch' });
+      const launched = await autoLaunch(cdpUrl);
+      if (launched) {
+        try {
+          const candidate = await connect();
+          browser = candidate;
+          attachDisconnectListener(candidate);
+          updateStatus({
+            state: 'connected',
+            connectedAt: now(),
+            lastError: null,
+            retryCount: retryDelays.length + 1,
+          });
+          return candidate;
+        } catch (error) {
+          updateStatus({ lastError: error.message });
+        }
       }
     }
 
@@ -256,7 +318,9 @@ async function getActivePage({ state = null, browser = null } = {}) {
 
   if (userPages.length === 0) {
     if (pages.length > 0) return pages[pages.length - 1];
-    throw new Error('No open tabs found in Chrome.');
+    const newPage = await context.newPage();
+    console.error('[Grasp] No open tabs — created a blank tab.');
+    return newPage;
   }
 
   for (const page of userPages) {

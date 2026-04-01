@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Grasp MCP Tools — E2E Test Page</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f5f5f5; color: #333; padding: 20px; }
+    h1 { text-align: center; margin-bottom: 24px; color: #1a73e8; }
+    .section { background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
+    .section h2 { font-size: 16px; color: #1a73e8; margin-bottom: 12px; border-bottom: 2px solid #e8eaed; padding-bottom: 6px; }
+    .section h2 span { font-size: 12px; color: #999; font-weight: normal; margin-left: 8px; }
+    button { padding: 6px 14px; border: 1px solid #dadce0; border-radius: 4px; background: #fff; cursor: pointer; font-size: 13px; margin: 4px; }
+    button:hover { background: #f1f3f4; }
+    button:active { background: #e8eaed; }
+    .result { background: #f8f9fa; border: 1px solid #e8eaed; border-radius: 4px; padding: 8px 12px; margin-top: 8px; font-family: 'Cascadia Code', monospace; font-size: 13px; min-height: 28px; white-space: pre-wrap; }
+    input[type="text"], input[type="email"] { padding: 6px 10px; border: 1px solid #dadce0; border-radius: 4px; font-size: 13px; margin: 4px; }
+    label { font-size: 13px; margin-right: 12px; cursor: pointer; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+
+    /* Drag & Drop */
+    .drag-zone { display: flex; gap: 12px; margin-top: 8px; }
+    .drag-list { border: 2px dashed #dadce0; border-radius: 6px; padding: 10px; min-height: 100px; min-width: 140px; }
+    .drag-list h3 { font-size: 12px; color: #999; margin-bottom: 6px; }
+    .drag-item { padding: 8px 12px; background: #e3f2fd; border: 1px solid #90caf9; border-radius: 4px; margin-bottom: 4px; cursor: grab; font-size: 13px; }
+    .drag-item:active { cursor: grabbing; }
+    .drag-list.over { border-color: #1a73e8; background: #f0f7ff; }
+
+    /* Nested scroll */
+    .scroll-outer { height: 180px; overflow-y: auto; border: 2px solid #dadce0; border-radius: 6px; padding: 10px; margin-top: 8px; }
+    .scroll-inner-item { padding: 10px; margin: 4px 0; background: #fce4ec; border-radius: 4px; font-size: 13px; }
+
+    /* Double-click */
+    .dblclick-box { width: 200px; height: 80px; background: #e8f5e9; border: 2px solid #a5d6a7; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 14px; cursor: pointer; margin-top: 8px; transition: background 0.2s; }
+    .dblclick-box.activated { background: #ffeb3b; border-color: #f9a825; }
+
+    /* Key events */
+    .key-display { display: inline-block; min-width: 200px; padding: 10px 16px; background: #263238; color: #4fc3f7; font-family: monospace; font-size: 15px; border-radius: 6px; margin-top: 8px; }
+
+    /* Wait for */
+    .delayed-box { margin-top: 8px; padding: 10px; border-radius: 4px; }
+    #delayed-text { display: none; background: #e8f5e9; padding: 10px; border-radius: 4px; font-weight: bold; color: #2e7d32; }
+    #loading-text { background: #fff3e0; padding: 10px; border-radius: 4px; color: #e65100; }
+  </style>
+</head>
+<body>
+
+<h1>🧪 Grasp MCP Tools — E2E Test Page</h1>
+
+<div class="grid">
+
+  <!-- 1. Dialog Handling (6.3) -->
+  <div class="section" id="section-dialog">
+    <h2>1. Dialog Handling <span>handle_dialog</span></h2>
+    <button id="btn-alert" onclick="alert('Hello from alert!')">Trigger Alert</button>
+    <button id="btn-confirm" onclick="document.getElementById('dialog-result').textContent = 'confirm: ' + confirm('Do you agree?')">Trigger Confirm</button>
+    <button id="btn-prompt" onclick="document.getElementById('dialog-result').textContent = 'prompt: ' + prompt('Enter your name:', 'Grasp')">Trigger Prompt</button>
+    <div class="result" id="dialog-result">Click a button to trigger a dialog</div>
+  </div>
+
+  <!-- 2. Evaluate (6.2) -->
+  <div class="section" id="section-evaluate">
+    <h2>2. JS Evaluate <span>evaluate</span></h2>
+    <p style="font-size:13px;margin-bottom:8px;">Use the <code>evaluate</code> tool to run JS here. Test expressions:</p>
+    <code style="display:block;background:#f8f9fa;padding:8px;border-radius:4px;font-size:12px;margin-bottom:4px;">document.title</code>
+    <code style="display:block;background:#f8f9fa;padding:8px;border-radius:4px;font-size:12px;margin-bottom:4px;">2 + 2</code>
+    <code style="display:block;background:#f8f9fa;padding:8px;border-radius:4px;font-size:12px;">document.querySelectorAll('button').length</code>
+  </div>
+
+  <!-- 3. File Upload (6.4) -->
+  <div class="section" id="section-upload">
+    <h2>3. File Upload <span>upload_file</span></h2>
+    <input type="file" id="file-input" multiple onchange="showFiles(this)">
+    <div class="result" id="upload-result">No files selected</div>
+    <script>
+      function showFiles(input) {
+        const names = Array.from(input.files).map(f => f.name + ' (' + (f.size/1024).toFixed(1) + 'KB)');
+        document.getElementById('upload-result').textContent = names.join(', ') || 'No files selected';
+      }
+    </script>
+  </div>
+
+  <!-- 4. Double Click (7.6) -->
+  <div class="section" id="section-dblclick">
+    <h2>4. Double Click <span>double_click</span></h2>
+    <div class="dblclick-box" id="dblclick-target" ondblclick="this.classList.toggle('activated'); this.textContent = this.classList.contains('activated') ? '✅ Activated!' : 'Double-click me'">
+      Double-click me
+    </div>
+    <div class="result" id="dblclick-result">Double-click the box above</div>
+    <script>
+      document.getElementById('dblclick-target').addEventListener('dblclick', () => {
+        document.getElementById('dblclick-result').textContent = 'dblclick event fired at ' + new Date().toLocaleTimeString();
+      });
+    </script>
+  </div>
+
+  <!-- 5. Checkbox / Radio (7.7) -->
+  <div class="section" id="section-checkbox">
+    <h2>5. Checkbox & Radio <span>check</span></h2>
+    <div style="margin-bottom:8px;">
+      <label><input type="checkbox" id="cb1"> Option A</label>
+      <label><input type="checkbox" id="cb2" checked> Option B (pre-checked)</label>
+      <label><input type="checkbox" id="cb3"> Option C</label>
+    </div>
+    <div>
+      <label><input type="radio" name="color" id="radio-red" value="red"> Red</label>
+      <label><input type="radio" name="color" id="radio-green" value="green"> Green</label>
+      <label><input type="radio" name="color" id="radio-blue" value="blue" checked> Blue (pre-selected)</label>
+    </div>
+    <div class="result" id="checkbox-result">
+      <script>
+        function updateCheckState() {
+          const cbs = ['cb1','cb2','cb3'].map(id => `${id}:${document.getElementById(id).checked}`).join(' ');
+          const rd = ['radio-red','radio-green','radio-blue'].map(id => `${id.replace('radio-','')}:${document.getElementById(id).checked}`).join(' ');
+          document.getElementById('checkbox-result').textContent = `Checkboxes: ${cbs}\nRadios: ${rd}`;
+        }
+        document.querySelectorAll('#section-checkbox input').forEach(el => el.addEventListener('change', updateCheckState));
+        updateCheckState();
+      </script>
+    </div>
+  </div>
+
+  <!-- 6. Key Down / Up (7.8) -->
+  <div class="section" id="section-keys">
+    <h2>6. Key Hold / Release <span>key_down / key_up</span></h2>
+    <p style="font-size:13px;margin-bottom:6px;">Press keys and watch them appear below. Modifiers show as held.</p>
+    <div class="key-display" id="key-display" tabindex="0">Focus here and press keys...</div>
+    <div class="result" id="key-result">Waiting for key events</div>
+    <script>
+      const keyDisplay = document.getElementById('key-display');
+      const keyResult = document.getElementById('key-result');
+      const heldKeys = new Set();
+      document.addEventListener('keydown', (e) => {
+        heldKeys.add(e.key);
+        keyDisplay.textContent = [...heldKeys].join(' + ') || '(none)';
+        keyResult.textContent = `Last keydown: "${e.key}" | Held: [${[...heldKeys].join(', ')}]`;
+      });
+      document.addEventListener('keyup', (e) => {
+        heldKeys.delete(e.key);
+        keyDisplay.textContent = [...heldKeys].join(' + ') || '(released)';
+        keyResult.textContent = `Last keyup: "${e.key}" | Held: [${[...heldKeys].join(', ')}]`;
+      });
+    </script>
+  </div>
+
+  <!-- 7. Drag & Drop (6.5) -->
+  <div class="section" id="section-drag">
+    <h2>7. Drag & Drop <span>drag</span></h2>
+    <div class="drag-zone">
+      <div class="drag-list" id="drag-source"
+           ondragover="event.preventDefault(); this.classList.add('over')"
+           ondragleave="this.classList.remove('over')"
+           ondrop="handleDrop(event, this)">
+        <h3>Source</h3>
+        <div class="drag-item" id="item-a" draggable="true" ondragstart="event.dataTransfer.setData('text/plain', this.id)">🍎 Apple</div>
+        <div class="drag-item" id="item-b" draggable="true" ondragstart="event.dataTransfer.setData('text/plain', this.id)">🍊 Orange</div>
+        <div class="drag-item" id="item-c" draggable="true" ondragstart="event.dataTransfer.setData('text/plain', this.id)">🍋 Lemon</div>
+      </div>
+      <div class="drag-list" id="drag-target"
+           ondragover="event.preventDefault(); this.classList.add('over')"
+           ondragleave="this.classList.remove('over')"
+           ondrop="handleDrop(event, this)">
+        <h3>Target</h3>
+      </div>
+    </div>
+    <div class="result" id="drag-result">Drag items from Source to Target</div>
+    <script>
+      function handleDrop(e, target) {
+        e.preventDefault();
+        target.classList.remove('over');
+        const id = e.dataTransfer.getData('text/plain');
+        const el = document.getElementById(id);
+        if (el) {
+          target.appendChild(el);
+          document.getElementById('drag-result').textContent = `Dropped "${el.textContent.trim()}" into ${target.querySelector('h3').textContent}`;
+        }
+      }
+    </script>
+  </div>
+
+  <!-- 8. Wait For (7.5) -->
+  <div class="section" id="section-wait">
+    <h2>8. Wait For <span>wait_for</span></h2>
+    <button id="btn-show-delayed" onclick="showDelayed()">Show text after 2s</button>
+    <button id="btn-hide-loading" onclick="hideLoading()">Hide loading after 2s</button>
+    <div class="delayed-box">
+      <div id="loading-text">⏳ Loading...</div>
+      <div id="delayed-text">✅ Content loaded successfully!</div>
+    </div>
+    <script>
+      function showDelayed() {
+        document.getElementById('delayed-text').style.display = 'none';
+        setTimeout(() => {
+          document.getElementById('delayed-text').style.display = 'block';
+        }, 2000);
+      }
+      function hideLoading() {
+        document.getElementById('loading-text').style.display = 'block';
+        setTimeout(() => {
+          document.getElementById('loading-text').style.display = 'none';
+        }, 2000);
+      }
+    </script>
+  </div>
+
+  <!-- 9. Console Logs (7.3) -->
+  <div class="section" id="section-console">
+    <h2>9. Console Logs <span>get_console_logs</span></h2>
+    <button id="btn-log" onclick="console.log('Test log message')">console.log</button>
+    <button id="btn-warn" onclick="console.warn('Test warning message')">console.warn</button>
+    <button id="btn-error" onclick="console.error('Test error message')">console.error</button>
+    <button id="btn-info" onclick="console.info('Test info message')">console.info</button>
+    <button id="btn-log5" onclick="for(let i=0;i<5;i++) console.log('Batch log #'+i)">Log 5x</button>
+    <div class="result">Use <code>get_console_logs</code> tool to read the captured messages</div>
+  </div>
+
+  <!-- 10. Cookies (7.4) -->
+  <div class="section" id="section-cookies">
+    <h2>10. Cookie Management <span>get/set/clear_cookies</span></h2>
+    <button id="btn-set-cookie" onclick="document.cookie='testCookie=hello123; path=/'; document.getElementById('cookie-result').textContent='Set testCookie=hello123'">Set JS Cookie</button>
+    <button id="btn-show-cookies" onclick="document.getElementById('cookie-result').textContent=document.cookie || '(none)'">Show document.cookie</button>
+    <div class="result" id="cookie-result">Use MCP tools to manage cookies</div>
+  </div>
+
+  <!-- 11. Nested Scroll (existing) -->
+  <div class="section" id="section-scroll">
+    <h2>11. Nested Scroll <span>scroll with hint_id</span></h2>
+    <div class="scroll-outer" id="scroll-container">
+      <div class="scroll-inner-item">Scroll Item 1</div>
+      <div class="scroll-inner-item">Scroll Item 2</div>
+      <div class="scroll-inner-item">Scroll Item 3</div>
+      <div class="scroll-inner-item">Scroll Item 4</div>
+      <div class="scroll-inner-item">Scroll Item 5</div>
+      <div class="scroll-inner-item">Scroll Item 6</div>
+      <div class="scroll-inner-item">Scroll Item 7</div>
+      <div class="scroll-inner-item">Scroll Item 8</div>
+      <div class="scroll-inner-item">Scroll Item 9</div>
+      <div class="scroll-inner-item">Scroll Item 10</div>
+      <div class="scroll-inner-item" id="scroll-bottom">Scroll Item 11 (bottom)</div>
+    </div>
+  </div>
+
+  <!-- 12. Form Input (for type tool) -->
+  <div class="section" id="section-form">
+    <h2>12. Form Input <span>type / press_key</span></h2>
+    <div style="margin-bottom:8px;">
+      <label>Name: <input type="text" id="input-name" placeholder="Type your name"></label>
+    </div>
+    <div style="margin-bottom:8px;">
+      <label>Email: <input type="email" id="input-email" placeholder="Type your email"></label>
+    </div>
+    <div class="result" id="form-result">Type in the fields above using the MCP type tool</div>
+    <script>
+      document.querySelectorAll('#section-form input').forEach(el => {
+        el.addEventListener('input', () => {
+          document.getElementById('form-result').textContent =
+            `Name: "${document.getElementById('input-name').value}" | Email: "${document.getElementById('input-email').value}"`;
+        });
+      });
+    </script>
+  </div>
+
+</div>
+
+<!-- Navigation target for go_back / go_forward test -->
+<div class="section" style="text-align:center; margin-top: 8px;">
+  <h2>Navigation Links <span>go_back / go_forward / reload</span></h2>
+  <a href="https://example.com" id="link-example">Go to example.com</a> |
+  <a href="https://httpbin.org/html" id="link-httpbin">Go to httpbin.org</a>
+</div>
+
+<div style="text-align:center;color:#999;font-size:12px;margin-top:24px;">
+  Grasp MCP E2E Test Page — Created for automated tool testing
+</div>
+
+</body>
+</html>

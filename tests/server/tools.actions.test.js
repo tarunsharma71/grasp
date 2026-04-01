@@ -148,6 +148,252 @@ test('get_status reports headless instance identity explicitly', async () => {
   });
 });
 
+test('scroll targets the nearest scrollable container and reports position metadata', async () => {
+  const calls = [];
+  const server = { registerTool(name, spec, handler) { calls.push({ name, handler }); } };
+  const state = {
+    hintMap: [],
+    pageState: { currentRole: 'content', graspConfidence: 'high', domRevision: 7 },
+    handoff: { state: 'idle' },
+    runtimeConfirmation: {
+      instance_key: 'windowed|Chrome/136.0.7103.114|1.3',
+      display: 'windowed',
+      browser: 'Chrome/136.0.7103.114',
+      protocolVersion: '1.3',
+      confirmed_at: 0,
+    },
+  };
+  const documentElement = { scrollTop: 0, scrollHeight: 2400, clientHeight: 900 };
+  const container = {
+    id: 'scroll-container',
+    tagName: 'DIV',
+    contentEditable: 'false',
+    scrollTop: 0,
+    scrollHeight: 1200,
+    clientHeight: 250,
+    scrollWidth: 400,
+    clientWidth: 400,
+    classList: [],
+    getAttribute: () => null,
+    scrollBy: (_dx, dy) => {
+      container.scrollTop += dy;
+    },
+    parentElement: documentElement,
+  };
+  const target = {
+    tagName: 'BUTTON',
+    contentEditable: 'false',
+    scrollHeight: 20,
+    clientHeight: 20,
+    scrollWidth: 20,
+    clientWidth: 20,
+    classList: [],
+    getAttribute: (name) => (name === 'data-grasp-id' ? 'B7' : null),
+    parentElement: container,
+  };
+  const page = createFakePage({
+    evaluate: async (fn, ...args) => {
+      const originalDocument = global.document;
+      const originalWindow = global.window;
+      const originalCss = global.CSS;
+      const originalRequestAnimationFrame = global.requestAnimationFrame;
+
+      global.document = {
+        documentElement,
+        querySelector: (selector) => {
+          if (selector === '[data-grasp-id="B7"]') return target;
+          if (selector === '#scroll-container') return container;
+          return null;
+        },
+      };
+      global.window = {
+        document: global.document,
+        getComputedStyle: (element) => {
+          if (element === container) {
+            return { overflowY: 'auto', overflowX: 'hidden' };
+          }
+          return { overflowY: 'visible', overflowX: 'visible' };
+        },
+      };
+      global.CSS = { escape: (value) => String(value) };
+      global.requestAnimationFrame = (callback) => callback();
+
+      try {
+        return await fn(...args);
+      } finally {
+        global.document = originalDocument;
+        global.window = originalWindow;
+        global.CSS = originalCss;
+        global.requestAnimationFrame = originalRequestAnimationFrame;
+      }
+    },
+  });
+  let syncCalls = 0;
+
+  registerActionTools(server, state, {
+    getActivePage: async () => page,
+    syncPageState: async (_page, currentState) => {
+      syncCalls += 1;
+      currentState.pageState = {
+        currentRole: 'content',
+        graspConfidence: 'high',
+        domRevision: 8,
+      };
+      return currentState;
+    },
+    getBrowserInstance: async () => ({
+      browser: 'Chrome/136.0.7103.114',
+      protocolVersion: '1.3',
+      headless: false,
+      display: 'windowed',
+      warning: null,
+    }),
+  });
+
+  const tool = calls.find((entry) => entry.name === 'scroll');
+  const result = await tool.handler({ direction: 'down', amount: 150, hint_id: 'B7' });
+
+  assert.equal(syncCalls, 2);
+  assert.match(result.content[0].text, /container #scroll-container/);
+  assert.equal(result.meta.target, '#scroll-container');
+  assert.equal(result.meta.scrollTop, 150);
+  assert.equal(result.meta.atTop, false);
+  assert.equal(result.meta.dom_revision, 8);
+});
+
+test('scroll reports horizontal metadata when scrolling a container sideways', async () => {
+  const calls = [];
+  const server = { registerTool(name, spec, handler) { calls.push({ name, handler }); } };
+  const state = {
+    hintMap: [],
+    pageState: { currentRole: 'content', graspConfidence: 'high', domRevision: 2 },
+    handoff: { state: 'idle' },
+    runtimeConfirmation: {
+      instance_key: 'windowed|Chrome/136.0.7103.114|1.3',
+      display: 'windowed',
+      browser: 'Chrome/136.0.7103.114',
+      protocolVersion: '1.3',
+      confirmed_at: 0,
+    },
+  };
+  const documentElement = { scrollTop: 0, scrollHeight: 100, clientHeight: 100, scrollLeft: 0, scrollWidth: 100, clientWidth: 100 };
+  const container = {
+    id: 'scroll-container',
+    tagName: 'DIV',
+    contentEditable: 'false',
+    scrollTop: 0,
+    scrollHeight: 100,
+    clientHeight: 100,
+    scrollLeft: 0,
+    scrollWidth: 900,
+    clientWidth: 300,
+    classList: [],
+    getAttribute: () => null,
+    scrollBy: (dx, _dy) => {
+      container.scrollLeft += dx;
+    },
+    parentElement: documentElement,
+  };
+  const target = {
+    tagName: 'BUTTON',
+    contentEditable: 'false',
+    scrollHeight: 20,
+    clientHeight: 20,
+    scrollWidth: 20,
+    clientWidth: 20,
+    classList: [],
+    getAttribute: (name) => (name === 'data-grasp-id' ? 'B9' : null),
+    parentElement: container,
+  };
+  const page = createFakePage({
+    evaluate: async (fn, ...args) => {
+      const originalDocument = global.document;
+      const originalWindow = global.window;
+      const originalCss = global.CSS;
+      const originalRequestAnimationFrame = global.requestAnimationFrame;
+
+      global.document = {
+        documentElement,
+        querySelector: (selector) => {
+          if (selector === '[data-grasp-id="B9"]') return target;
+          if (selector === '#scroll-container') return container;
+          return null;
+        },
+      };
+      global.window = {
+        document: global.document,
+        getComputedStyle: (element) => {
+          if (element === container) {
+            return { overflowY: 'hidden', overflowX: 'auto' };
+          }
+          return { overflowY: 'visible', overflowX: 'visible' };
+        },
+      };
+      global.CSS = { escape: (value) => String(value) };
+      global.requestAnimationFrame = (callback) => callback();
+
+      try {
+        return await fn(...args);
+      } finally {
+        global.document = originalDocument;
+        global.window = originalWindow;
+        global.CSS = originalCss;
+        global.requestAnimationFrame = originalRequestAnimationFrame;
+      }
+    },
+  });
+
+  registerActionTools(server, state, {
+    getActivePage: async () => page,
+    syncPageState: async (_page, currentState) => {
+      currentState.pageState = state.pageState;
+      return currentState;
+    },
+    getBrowserInstance: async () => ({
+      browser: 'Chrome/136.0.7103.114',
+      protocolVersion: '1.3',
+      headless: false,
+      display: 'windowed',
+      warning: null,
+    }),
+  });
+
+  const tool = calls.find((entry) => entry.name === 'scroll');
+  const result = await tool.handler({ direction: 'right', amount: 120, hint_id: 'B9' });
+
+  assert.equal(result.meta.target, '#scroll-container');
+  assert.equal(result.meta.scrollLeft, 120);
+  assert.equal(result.meta.scrollWidth, 900);
+  assert.equal(result.meta.clientWidth, 300);
+  assert.equal(result.meta.atLeft, false);
+  assert.equal(result.meta.atRight, false);
+});
+
+test('screenshot returns base64 image content when page capture yields a Buffer', async () => {
+  const calls = [];
+  const server = { registerTool(name, spec, handler) { calls.push({ name, handler }); } };
+  const page = createFakePage({
+    screenshot: async () => Buffer.from('png-binary'),
+    waitForFunction: async () => undefined,
+  });
+  const state = {
+    hintMap: [],
+    pageState: { currentRole: 'content', graspConfidence: 'high' },
+    handoff: { state: 'idle' },
+  };
+
+  registerActionTools(server, state, {
+    getActivePage: async () => page,
+  });
+
+  const tool = calls.find((entry) => entry.name === 'screenshot');
+  const result = await tool.handler();
+
+  assert.strictEqual(result.content[0].type, 'image');
+  assert.strictEqual(result.content[0].data, Buffer.from('png-binary').toString('base64'));
+  assert.strictEqual(result.content[0].mimeType, 'image/png');
+});
+
 test('navigate is blocked until the runtime instance is explicitly confirmed', async () => {
   const calls = [];
   const server = { registerTool(name, spec, handler) { calls.push({ name, handler }); } };
@@ -296,4 +542,222 @@ test('get_page_summary falls back to the old path on non-BOSS pages', async () =
     summary: 'Example page text',
     main_text: 'Example page text.',
   });
+});
+
+test('get_tabs returns injected tab metadata', async () => {
+  const calls = [];
+  const server = { registerTool(name, spec, handler) { calls.push({ name, handler }); } };
+  const state = { pageState: { currentRole: 'content', graspConfidence: 'high' }, handoff: { state: 'idle' } };
+
+  registerActionTools(server, state, {
+    getTabs: async () => ([
+      { index: 0, title: 'Example', url: 'https://example.com', isUser: true },
+      { index: 1, title: 'Docs', url: 'https://example.com/docs', isUser: true },
+    ]),
+  });
+
+  const tool = calls.find((entry) => entry.name === 'get_tabs');
+  const result = await tool.handler();
+
+  assert.match(result.content[0].text, /\[0\] Example — https:\/\/example\.com/);
+  assert.match(result.content[0].text, /\[1\] Docs — https:\/\/example\.com\/docs/);
+  assert.equal(result.meta.tabs.length, 2);
+});
+
+test('new_tab opens a tab after runtime confirmation and syncs page state', async () => {
+  const calls = [];
+  const server = { registerTool(name, spec, handler) { calls.push({ name, handler }); } };
+  const page = createFakePage({
+    url: () => 'https://example.com/new',
+    title: () => 'New Tab',
+  });
+  const state = {
+    hintMap: [],
+    pageState: { currentRole: 'content', graspConfidence: 'high', riskGateDetected: false },
+    handoff: { state: 'idle' },
+    runtimeConfirmation: {
+      instance_key: 'windowed|Chrome/136.0.7103.114|1.3',
+      display: 'windowed',
+      browser: 'Chrome/136.0.7103.114',
+      protocolVersion: '1.3',
+      confirmed_at: 0,
+    },
+  };
+  let syncCalls = 0;
+
+  registerActionTools(server, state, {
+    newTab: async (url) => {
+      assert.equal(url, 'https://example.com/new');
+      return page;
+    },
+    syncPageState: async (_page, currentState, options) => {
+      syncCalls += 1;
+      assert.deepEqual(options, { force: true });
+      currentState.pageState = state.pageState;
+      return currentState;
+    },
+    getBrowserInstance: async () => ({
+      browser: 'Chrome/136.0.7103.114',
+      protocolVersion: '1.3',
+      headless: false,
+      display: 'windowed',
+      warning: null,
+    }),
+  });
+
+  const tool = calls.find((entry) => entry.name === 'new_tab');
+  const result = await tool.handler({ url: 'https://example.com/new' });
+
+  assert.equal(syncCalls, 1);
+  assert.match(result.content[0].text, /Opened new tab: https:\/\/example\.com\/new/);
+  assert.equal(result.meta.url, 'https://example.com/new');
+});
+
+test('handle_dialog accepts pending dialogs and clears dialog state', async () => {
+  const calls = [];
+  const server = { registerTool(name, spec, handler) { calls.push({ name, handler }); } };
+  let acceptedText = null;
+  const state = {
+    hintMap: [],
+    pageState: { currentRole: 'content', graspConfidence: 'high', riskGateDetected: false },
+    handoff: { state: 'idle' },
+    runtimeConfirmation: {
+      instance_key: 'windowed|Chrome/136.0.7103.114|1.3',
+      display: 'windowed',
+      browser: 'Chrome/136.0.7103.114',
+      protocolVersion: '1.3',
+      confirmed_at: 0,
+    },
+    pendingDialog: {
+      type: 'prompt',
+      message: 'Your name?',
+      defaultValue: '',
+      ref: {
+        accept: async (text) => {
+          acceptedText = text;
+        },
+        dismiss: async () => undefined,
+      },
+    },
+  };
+
+  registerActionTools(server, state, {
+    getBrowserInstance: async () => ({
+      browser: 'Chrome/136.0.7103.114',
+      protocolVersion: '1.3',
+      headless: false,
+      display: 'windowed',
+      warning: null,
+    }),
+  });
+
+  const tool = calls.find((entry) => entry.name === 'handle_dialog');
+  const result = await tool.handler({ action: 'accept', text: 'Copilot' });
+
+  assert.equal(acceptedText, 'Copilot');
+  assert.equal(state.pendingDialog, null);
+  assert.match(result.content[0].text, /Dialog accepted\. Type: prompt, Message: "Your name\?"/);
+});
+
+test('get_console_logs filters entries and clears the buffer when requested', async () => {
+  const calls = [];
+  const server = { registerTool(name, spec, handler) { calls.push({ name, handler }); } };
+  const page = createFakePage({
+    on: () => undefined,
+  });
+  const state = {
+    hintMap: [],
+    pageState: { currentRole: 'content', graspConfidence: 'high' },
+    handoff: { state: 'idle' },
+    consoleLogs: [
+      { level: 'error', text: 'boom', timestamp: 1 },
+      { level: 'info', text: 'ok', timestamp: 2 },
+    ],
+  };
+
+  registerActionTools(server, state, {
+    getActivePage: async () => page,
+  });
+
+  const tool = calls.find((entry) => entry.name === 'get_console_logs');
+  const result = await tool.handler({ level: 'error', clear: true });
+
+  assert.match(result.content[0].text, /\[error\] boom/);
+  assert.equal(result.meta.count, 1);
+  assert.equal(result.meta.total, 2);
+  assert.deepEqual(state.consoleLogs, []);
+});
+
+test('get_console_logs does not re-attach listeners when the same page navigates', async () => {
+  const calls = [];
+  const server = { registerTool(name, spec, handler) { calls.push({ name, handler }); } };
+  const attached = [];
+  let currentUrl = 'https://example.com/first';
+  const page = createFakePage({
+    url: () => currentUrl,
+    on: (eventName) => {
+      attached.push(eventName);
+    },
+  });
+  const state = {
+    hintMap: [],
+    pageState: { currentRole: 'content', graspConfidence: 'high' },
+    handoff: { state: 'idle' },
+    consoleLogs: [],
+  };
+
+  registerActionTools(server, state, {
+    getActivePage: async () => page,
+  });
+
+  const tool = calls.find((entry) => entry.name === 'get_console_logs');
+  await tool.handler({});
+  currentUrl = 'https://example.com/second';
+  await tool.handler({});
+
+  assert.deepEqual(attached, ['dialog', 'console']);
+});
+
+test('wait_for uses getByText for text conditions with special characters', async () => {
+  const calls = [];
+  const server = { registerTool(name, spec, handler) { calls.push({ name, handler }); } };
+  const requested = [];
+  const waits = [];
+  const targetText = 'He said "hi"\nthere';
+  const page = createFakePage({
+    _guid: undefined,
+    url: () => 'https://example.com',
+    on: () => undefined,
+    getByText: (text) => {
+      requested.push(text);
+      return {
+        first() {
+          return {
+            waitFor: async (options) => {
+              waits.push(options);
+            },
+          };
+        },
+      };
+    },
+    locator: () => {
+      throw new Error('wait_for should use getByText for text waits');
+    },
+  });
+  const state = {
+    hintMap: [],
+    pageState: { currentRole: 'content', graspConfidence: 'high' },
+    handoff: { state: 'idle' },
+  };
+
+  registerActionTools(server, state, {
+    getActivePage: async () => page,
+  });
+
+  const tool = calls.find((entry) => entry.name === 'wait_for');
+  const result = await tool.handler({ text: targetText, timeout: 4321 });
+
+  assert.deepEqual(requested, [targetText]);
+  assert.deepEqual(waits, [{ state: 'visible', timeout: 4321 }]);
+  assert.match(result.content[0].text, /appeared on the page/);
 });

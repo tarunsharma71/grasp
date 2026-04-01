@@ -31,11 +31,12 @@ export function errorResponse(value, meta = {}) {
 }
 
 export function imageResponse(data, mimeType = 'image/png') {
+  const base64 = Buffer.isBuffer(data) ? data.toString('base64') : String(data);
   return {
     content: [
       {
         type: 'image',
-        data,
+        data: base64,
         mimeType,
       },
     ],
