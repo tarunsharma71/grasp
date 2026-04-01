@@ -4,6 +4,22 @@ All notable changes to Grasp are documented here.
 
 ---
 
+## v0.6.5 — 2026-04-01
+
+### Added
+- High-level runtime responses now inject a surface-specific `agent_boundary` package so agents can see the current operating boundary directly from gateway, form, and workspace results.
+- Added explicit boundary guidance coverage for `public_read`, `live_session`, `session_warmup`, `form_runtime`, `workspace_runtime`, and `handoff`.
+
+### Changed
+- `buildGatewayResponse` now appends concise boundary text to the visible tool output instead of leaving route/surface discipline only in docs and skills.
+- Gateway, form, and workspace flows now expose the same boundary contract through both response text and structured metadata.
+
+### Validated
+- New route-boundary unit coverage passes for the six boundary modes.
+- Gateway, form, and workspace integration coverage stays green with boundary injection enabled.
+
+---
+
 ## v0.6.4 — 2026-04-01
 
 ### Added

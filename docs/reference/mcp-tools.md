@@ -39,6 +39,8 @@ Recommended default flow:
 4. `explain_route` to read the selected route rationale
 5. if needed, move into handoff and then `resume_after_handoff`
 
+High-level runtime responses now also include `agent_boundary` metadata plus a short `Boundary: ...` text block. Treat that boundary as the active surface contract for the current step, especially when the route changes between public read, live session, form, workspace, warmup, or handoff.
+
 Manual smoke playbook: [docs/reference/smoke-paths.md](./smoke-paths.md)
 
 Fast-path adapters:

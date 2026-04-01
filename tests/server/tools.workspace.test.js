@@ -48,6 +48,8 @@ test('workspace_inspect returns task_kind workspace with live items and composer
   assert.equal(result.meta.result.task_kind, 'workspace');
   assert.equal(result.meta.result.workspace.workspace_surface, 'thread');
   assert.equal(result.meta.result.workspace.live_items.length, 1);
+  assert.equal(result.meta.agent_boundary.key, 'workspace_runtime');
+  assert.match(result.content[0].text, /Boundary: workspace_runtime/);
 });
 
 test('workspace_inspect redacts runtime fields from the public workspace view', async () => {

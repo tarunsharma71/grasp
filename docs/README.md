@@ -2,7 +2,7 @@
 
 Public docs for the Grasp route-aware Agent Web Runtime.
 
-Current package release: `v0.6.4`
+Current package release: `v0.6.5`
 
 ---
 

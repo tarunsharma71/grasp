@@ -44,6 +44,7 @@ test('entry returns a gateway response with strategy metadata', async () => {
   assert.equal(result.meta.status, 'direct');
   assert.equal(result.meta.page.url, 'https://example.com');
   assert.equal(result.meta.continuation.suggested_next_action, 'inspect');
+  assert.equal(result.meta.agent_boundary.key, 'public_read');
   assert.equal(receivedArgs.deps.auditName, 'entry');
 });
 
@@ -87,6 +88,7 @@ test('entry marks handoff or preheat outcomes as gated', async () => {
   assert.equal(result.meta.continuation.can_continue, false);
   assert.equal(result.meta.continuation.suggested_next_action, 'request_handoff');
   assert.equal(result.meta.continuation.handoff_state, 'handoff_required');
+  assert.equal(result.meta.agent_boundary.key, 'handoff');
 });
 
 test('inspect returns current gateway page status without raw primitive wording', async () => {

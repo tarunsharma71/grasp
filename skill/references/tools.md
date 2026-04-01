@@ -59,6 +59,8 @@ extract / extract_structured / extract_batch / share_page / continue
 explain_route              (when route choice matters)
 ```
 
+When a high-level tool responds, read the `Boundary: ...` block before picking the next action. The same response also carries structured `agent_boundary` metadata with the current surface key, preferred tools, avoid list, confirmation rule, and next step.
+
 ### 3.2 Structured extraction
 
 When the task is "turn this page into named fields", prefer:

@@ -34,6 +34,8 @@ test('form_inspect returns task_kind form with sections, fields, and ambiguity e
   assert.equal(result.meta.result.form.fields.length, 1);
   assert.equal(result.meta.evidence.ambiguous_labels.length, 0);
   assert.equal(result.meta.continuation.suggested_next_action, 'verify_form');
+  assert.equal(result.meta.agent_boundary.key, 'form_runtime');
+  assert.match(result.content[0].text, /Boundary: form_runtime/);
 });
 
 test('fill_form returns written skipped unresolved refreshed form and write evidence', async () => {

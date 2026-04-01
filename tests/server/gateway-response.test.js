@@ -36,3 +36,16 @@ test('buildGatewayResponse includes runtime instance metadata when provided', ()
   assert.match(response.content[0].text, /Current endpoint is a headless browser, not a visible local browser window\./);
   assert.equal(response.meta.runtime.instance.display, 'headless');
 });
+
+test('buildGatewayResponse injects agent boundary guidance into text and meta', () => {
+  const response = buildGatewayResponse({
+    status: 'direct',
+    page: { title: 'Example', url: 'https://example.com', page_role: 'content', risk_gate: false, grasp_confidence: 'high' },
+    continuation: { can_continue: true, suggested_next_action: 'extract', handoff_state: 'idle' },
+    route: { selected_mode: 'public_read' },
+  });
+
+  assert.equal(response.meta.agent_boundary.key, 'public_read');
+  assert.match(response.content[0].text, /Boundary: public_read/);
+  assert.match(response.content[0].text, /Boundary guidance:/);
+});
