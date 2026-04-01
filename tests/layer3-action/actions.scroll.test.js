@@ -163,6 +163,50 @@ test('findScrollableAncestor skips ambiguous fallback selectors', async () => {
   assert.equal(selector, '#unique-parent');
 });
 
+test('findScrollableAncestor does not fall back to a bare tag selector', async () => {
+  const root = {};
+  const container = {
+    tagName: 'DIV',
+    contentEditable: 'false',
+    scrollHeight: 900,
+    clientHeight: 200,
+    scrollWidth: 300,
+    clientWidth: 300,
+    classList: [],
+    getAttribute: () => null,
+    parentElement: root,
+  };
+  const target = {
+    tagName: 'BUTTON',
+    contentEditable: 'false',
+    scrollHeight: 20,
+    clientHeight: 20,
+    scrollWidth: 20,
+    clientWidth: 20,
+    classList: [],
+    getAttribute: (name) => (name === 'data-grasp-id' ? 'B10' : null),
+    parentElement: container,
+  };
+  const page = createFakePage({
+    evaluate: async (fn, ...args) => runWithBrowserGlobals(
+      () => fn(...args),
+      {
+        querySelector: (selector) => (selector === '[data-grasp-id="B10"]' ? target : null),
+        querySelectorAll: (selector) => (selector === 'div' ? [container] : []),
+        getComputedStyle: (element) => {
+          if (element === container) {
+            return { overflowY: 'auto', overflowX: 'hidden' };
+          }
+          return { overflowY: 'visible', overflowX: 'visible' };
+        },
+      }
+    ),
+  });
+
+  const selector = await findScrollableAncestor(page, '[data-grasp-id="B10"]');
+  assert.equal(selector, null);
+});
+
 test('scroll supports horizontal wheel scrolling on the page', async () => {
   const page = createFakePage({
     evaluate: async (fn, ...args) => runWithBrowserGlobals(() => fn(...args)),
